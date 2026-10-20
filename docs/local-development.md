@@ -23,7 +23,7 @@ bun install
 bun run db:up
 ```
 
-The Compose service binds PostgreSQL only to `127.0.0.1`, uses health checks and a named volume. Database is not exposed to other computers by default.
+The Compose service binds PostgreSQL only to `127.0.0.1:15432` by default (override with `POSTGRES_PORT` if needed), uses health checks and a named volume. Database is not exposed to other computers by default.
 
 ## Start processes
 
