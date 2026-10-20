@@ -1,9 +1,34 @@
+# JavaScript dependencies and build output
 node_modules/
 frontend/node_modules/
 frontend/dist/
+
+# Local environment files and secrets
 .env
+.env.*
 **/.env
+**/.env.*
 !.env.example
+!**/.env.example
+**/secrets/
+**/secrets.*.json
+**/appsettings.*.local.json
+**/appsettings.Secrets.json
+
+# Private keys and local signing certificates
+*.key
+*.pem
+*.pfx
+*.p12
+*.jks
+*.keystore
+
+# Local database backups and data exports
+*.dump
+*.backup
+*.bak
+
+# .NET build output and IDE state
 **/bin/
 **/obj/
 .vs/
