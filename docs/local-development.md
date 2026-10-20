@@ -35,11 +35,14 @@ bun run dev:web
 
 Terminal 2 (API host):
 
-```sh
+Set `ConnectionStrings__Postgres` to a connection string using the same local credentials as `.env`, then run the API. Example for PowerShell:
+
+```powershell
+$env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_master_data;Username=product_master_data;Password=<same value as POSTGRES_PASSWORD in .env>"
 dotnet run --project src/ProductMasterData.Api
 ```
 
-At this bootstrap stage the API host has no product endpoints, database connection, migrations or authentication; those are added with the first API feature. The frontend is the unmodified Vite starter pending product UI work.
+`GET /health/live` reports process liveness without checking PostgreSQL. `GET /health/ready` returns 200 only when PostgreSQL accepts a query; otherwise it returns 503 with a generic status and no connection details. Both routes are operational endpoints, not business APIs. At this stage there are no record endpoints, schema migrations, authentication, or permissions. The frontend is the unmodified Vite starter pending product UI work.
 
 ## Checks
 

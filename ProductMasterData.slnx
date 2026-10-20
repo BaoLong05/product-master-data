@@ -6,6 +6,6 @@
     <Project Path="src/ProductMasterData.Infrastructure/ProductMasterData.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/ProductMasterData.Domain.Tests/ProductMasterData.Domain.Tests.csproj" />
+    <Project Path="tests/ProductMasterData.Api.Tests/ProductMasterData.Api.Tests.csproj" />
   </Folder>
 </Solution>

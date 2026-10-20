@@ -2,13 +2,13 @@
 
 This is an implementation sequence, not a claim that features exist. Deliver one focused vertical slice per feature/branch and verify each before proceeding.
 
-## Phase 0 — documentation and bootstrap (current)
+## Phase 0 — documentation and bootstrap (complete)
 
-Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, React TypeScript scaffold. No feature API, schema, auth, or production-ready behavior.
+Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript scaffold are in place. No product-record schema or CRUD behavior exists yet.
 
-## Phase 1 — API foundation
+## Phase 1 — API foundation (in progress)
 
-Agree the first endpoint/use case and auth bootstrap boundary; configure shared API conventions, Problem Details, OpenAPI, health checks, DI, structured logging, PostgreSQL/EF Core migrations, and integration-test infrastructure. First product API should be selected explicitly, expected likely read-only list/query only after schema and permission decisions.
+The first operational API slice now provides liveness/readiness health endpoints, a PostgreSQL readiness probe, and API integration tests. Remaining foundation work includes agreed configuration conventions, Problem Details/OpenAPI as product routes are introduced, structured logging, EF Core/migrations, and database-backed integration-test setup. The first product-data API must be chosen after schema and authorization decisions.
 
 ## Phase 2 — identity and permissions
 

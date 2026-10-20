@@ -22,13 +22,14 @@ bun run db:up
 bun run dev:web
 ```
 
-In another terminal, start the empty API host:
+In another terminal, set the API's database connection string to the same credentials in `.env`, then start the API. PowerShell example:
 
-```sh
+```powershell
+$env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_master_data;Username=product_master_data;Password=<same value as POSTGRES_PASSWORD in .env>"
 dotnet run --project src/ProductMasterData.Api
 ```
 
-The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. No API endpoints or database migrations are implemented yet; the first API feature will be developed after this docs/config baseline is reviewed.
+The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. Business record endpoints, migrations, authentication, and permissions are not implemented yet.
 
 ## Root commands
 
