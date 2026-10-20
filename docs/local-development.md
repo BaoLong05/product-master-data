@@ -42,7 +42,7 @@ $env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_m
 dotnet run --project src/ProductMasterData.Api
 ```
 
-`GET /health/live` reports process liveness without checking PostgreSQL. `GET /health/ready` returns 200 only when PostgreSQL accepts a query; otherwise it returns 503 with a generic status and no connection details. Both routes are operational endpoints, not business APIs. At this stage there are no record endpoints, schema migrations, authentication, or permissions. The frontend is the unmodified Vite starter pending product UI work.
+`GET /health/live` reports process liveness without checking PostgreSQL. `GET /health/ready` returns 200 only when PostgreSQL accepts a query; otherwise it returns 503 with a generic status and no connection details. Unmatched routes return Problem Details with a trace ID and no internal exception details. The generated OpenAPI document is available at `/openapi/v1.json`. These are operational/API-foundation contracts, not business APIs. At this stage there are no record endpoints, schema migrations, authentication, or permissions. The frontend is the unmodified Vite starter pending product UI work.
 
 ## Checks
 

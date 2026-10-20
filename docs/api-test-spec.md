@@ -35,4 +35,4 @@ The first three are HTTP integration tests using `WebApplicationFactory` and a d
 
 ## Explicit non-goals
 
-No record DTOs, migrations, EF entities, authentication, authorization, import, CRUD, Swagger contract, or external-network exposure are added by this foundation slice. A record endpoint requires confirmed schema and authorization boundaries first.
+No record DTOs, migrations, EF entities, authentication, authorization, import, CRUD, or external-network exposure are added by the health foundation slice. Its API error/OpenAPI contracts are specified separately in `api-error-contract-test-spec.md`. A record endpoint requires confirmed schema and authorization boundaries first.
