@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace ProductMasterData.Api.Health;
@@ -7,28 +6,30 @@ public static class HealthEndpointExtensions
 {
     public static IEndpointRouteBuilder MapProductHealthEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapHealthChecks("/health/live", CreateOptions("live"));
-        endpoints.MapHealthChecks("/health/ready", CreateOptions("ready"));
+        MapHealthEndpoint(endpoints, "/health/live", "live", "LiveHealth");
+        MapHealthEndpoint(endpoints, "/health/ready", "ready", "ReadyHealth");
 
         return endpoints;
     }
 
-    private static HealthCheckOptions CreateOptions(string tag) => new()
+    private static void MapHealthEndpoint(
+        IEndpointRouteBuilder endpoints,
+        string path,
+        string tag,
+        string operationName)
     {
-        Predicate = registration => registration.Tags.Contains(tag),
-        ResultStatusCodes =
+        endpoints.MapGet(path, async (HealthCheckService healthChecks, HttpContext context) =>
         {
-            [HealthStatus.Healthy] = StatusCodes.Status200OK,
-            [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
-            [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
-        },
-        ResponseWriter = WriteResponseAsync
-    };
+            var report = await healthChecks.CheckHealthAsync(
+                registration => registration.Tags.Contains(tag),
+                context.RequestAborted);
+            var statusCode = report.Status == HealthStatus.Healthy
+                ? StatusCodes.Status200OK
+                : StatusCodes.Status503ServiceUnavailable;
 
-    private static Task WriteResponseAsync(HttpContext context, HealthReport report) =>
-        context.Response.WriteAsJsonAsync(
-            new HealthStatusResponse(report.Status.ToString()),
-            cancellationToken: context.RequestAborted);
+            return Results.Json(new HealthStatusResponse(report.Status.ToString()), statusCode: statusCode);
+        }).WithName(operationName);
+    }
 
     private sealed record HealthStatusResponse(string Status);
 }

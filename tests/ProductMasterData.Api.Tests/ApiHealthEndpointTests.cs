@@ -56,6 +56,33 @@ public sealed class ApiHealthEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Unknown_route_returns_safe_problem_details()
+    {
+        using var factory = new ApiFactory(databaseIsHealthy: true);
+        using var response = await factory.CreateClient().GetAsync("/not-a-route");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(404, body.RootElement.GetProperty("status").GetInt32());
+        Assert.True(body.RootElement.GetProperty("traceId").GetString()?.Length > 0);
+        Assert.DoesNotContain("DO_NOT_LEAK", body.RootElement.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Openapi_document_lists_health_routes()
+    {
+        using var factory = new ApiFactory(databaseIsHealthy: true);
+        using var response = await factory.CreateClient().GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var paths = document.RootElement.GetProperty("paths");
+        Assert.True(paths.TryGetProperty("/health/live", out _));
+        Assert.True(paths.TryGetProperty("/health/ready", out _));
+    }
+
     private sealed record HealthResponse(string Status);
 }
 
