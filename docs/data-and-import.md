@@ -1,6 +1,6 @@
 # Data and Excel import
 
-Status: proposed based on inspection of `Sample Input Form.xlsx`; key and duplicate rules confirmed by the user. Remaining type, field-length, and normalization decisions must be confirmed before schema/API implementation.
+Status: initial record schema implemented. The first migration preserves all 27 source values as nullable text; typed parsing/derived columns remain pending confirmed date/time, decimal, vocabulary, and normalization rules.
 
 ## Observed workbook
 
@@ -40,7 +40,7 @@ The initial import contract should account for all source headers exactly as the
 
 Keep source labels and raw values available for traceability. Do not assume a spreadsheet row index is a durable record ID.
 
-## Decisions required before production schema
+## Decisions still required for typed parsing and production validation
 
 - `M.CODE` is the unique key when present. Because records may be saved with fields missing, a blank/null `M.CODE` is allowed and is not treated as a duplicate key; enforce uniqueness for non-empty values and use it to detect existing records and duplicates within an import batch.
 - Required columns and valid domain values for product type/status/region/approval.
@@ -50,7 +50,7 @@ Keep source labels and raw values available for traceability. Do not assume a sp
 - How to interpret date-only and local date/time fields; blank, malformed and out-of-range values.
 - Whether to retain original uploaded files and for how long.
 
-Do not invent other unique constraints, destructive upsert behavior, mandatory fields, or data deletion policy.
+See `database-schema.md` for the initial storage design and planned identity/import/audit tables. Do not invent other unique constraints, destructive upsert behavior, mandatory fields, or data deletion policy.
 
 ## Safe import flow
 

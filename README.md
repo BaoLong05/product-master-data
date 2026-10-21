@@ -19,23 +19,25 @@ From repository root:
 ```sh
 bun install
 bun run db:up
+dotnet tool restore
 bun run dev:web
 ```
 
-In another terminal, set the API's database connection string to the same credentials in `.env`, then start the API. PowerShell example:
+In another PowerShell terminal, set the API's database connection string to the same credentials in `.env`, apply the schema migration, then start the API:
 
 ```powershell
 $env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_master_data;Username=product_master_data;Password=<same value as POSTGRES_PASSWORD in .env>"
+bun run db:migrate
 dotnet run --project src/ProductMasterData.Api
 ```
 
-The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. Business record endpoints, migrations, authentication, and permissions are not implemented yet.
+The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. The initial catalog schema is applied with `bun run db:migrate`; product CRUD, user persistence/login, and permission enforcement are not implemented yet.
 
 ## Root commands
 
 - `bun run dev:web` — Vite frontend development server.
 - `bun run build:web` / `bun run lint:web` — frontend checks.
-- `bun run db:up`, `bun run db:down`, `bun run db:logs` — local PostgreSQL lifecycle.
+- `bun run db:up`, `bun run db:down`, `bun run db:logs`, `bun run db:migrate` — local PostgreSQL lifecycle and additive schema migration.
 - `bun run api:build`, `bun run api:test` — .NET solution checks.
 - `bun run check` — all current build/lint/test checks.
 
@@ -43,4 +45,4 @@ Stopping Compose does not delete the named database volume. To permanently delet
 
 ## First administrator and production status
 
-Authentication, account bootstrap, migrations, and CRUD APIs are not implemented. Do not expose this scaffold to a network or treat the placeholder application as production-ready. Setup and security behavior will be documented as those features are implemented.
+Authentication, account bootstrap, and CRUD APIs are not implemented. The initial migration creates only the catalog record table; it does not import workbook data or create a user. Do not expose this scaffold to a network or treat the placeholder application as production-ready. Setup and security behavior will be documented as those features are implemented.

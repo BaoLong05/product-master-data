@@ -1,6 +1,6 @@
 # Architecture (proposed)
 
-Status: initial target design; no business API or schema has been implemented yet.
+Status: initial target design; the first product-record schema and migration are implemented, while business APIs and identity/import schemas remain pending.
 
 ## Runtime components
 
