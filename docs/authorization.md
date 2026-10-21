@@ -1,6 +1,6 @@
 # Authentication and authorization design
 
-Status: local first-admin bootstrap and cookie login exist, including CSRF validation and login throttling. Permission enforcement and account/role management are still pending; all application data access must remain deny-by-default.
+Status: local first-admin bootstrap and cookie login/logout exist, including CSRF validation, login throttling, and per-request active-user/security-stamp validation. Permission enforcement and account/role management are still pending; all application data access must remain deny-by-default.
 
 ## Permission model
 
@@ -46,6 +46,8 @@ Authorization is verified on every API request, including direct object access, 
 ## Authentication and audit requirements
 
 Use framework-supported adaptive password hashing; no default credentials. Accounts are local/internal: an administrator creates users and assigns roles; there is no public self-registration or external identity provider. Document first-admin bootstrap as an explicit one-time local operation. Use antiforgery request-token validation with secure cookie settings. Login is currently limited to five requests per client IP per minute; use generic authentication failures to avoid account enumeration. Reassess limits/proxy IP handling before deployment beyond localhost.
+
+Authenticated cookies are checked against the current active-user state and Identity security stamp on every request. Logout rotates the stamp and therefore revokes all sessions for that user; this incurs a persistence read on authenticated requests and requires the identity store to be available. Any future account, credential, role, or permission change that must take effect immediately must also rotate the security stamp before reporting success, because role/permission claims in existing cookies are snapshots. Per-device revocation is not implemented.
 
 Audit sensitive record changes/deletes, import commits, exports, user/role/permission changes with actor, UTC timestamp, action, target, outcome, correlation ID and safe metadata. Audit events are append-only to normal application users; avoid recording passwords, tokens, or full spreadsheet row values.
 
