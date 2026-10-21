@@ -130,6 +130,19 @@ app.MapPost("/api/v1/auth/login", async (
 })
     .RequireRateLimiting("login")
     .AllowAnonymous();
+app.MapPost("/api/v1/auth/logout", async (
+    IAntiforgery antiforgery,
+    HttpContext httpContext) =>
+{
+    if (!await antiforgery.IsRequestValidAsync(httpContext))
+    {
+        return Results.BadRequest();
+    }
+
+    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.NoContent();
+})
+    .RequireAuthorization();
 app.MapGet("/api/v1/auth/me", (ClaimsPrincipal user) => Results.Ok(new CurrentIdentityResponse(
         user.FindFirstValue(ClaimTypes.NameIdentifier),
         user.FindFirstValue(ClaimTypes.Email)))

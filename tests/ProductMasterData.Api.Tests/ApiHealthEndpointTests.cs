@@ -83,6 +83,7 @@ public sealed class ApiHealthEndpointTests
         Assert.True(paths.TryGetProperty("/health/ready", out _));
         Assert.True(paths.TryGetProperty("/api/v1/auth/me", out _));
         Assert.True(paths.TryGetProperty("/api/v1/auth/login", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/auth/logout", out _));
     }
 
     [Fact]
