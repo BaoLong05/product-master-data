@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;
 using ProductMasterData.Api.Health;
 using ProductMasterData.Application.Health;
 using ProductMasterData.Infrastructure.Health;
+using ProductMasterData.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +39,8 @@ builder.Services.AddProblemDetails(options =>
 
 builder.Services.AddSingleton<IDatabaseReadinessProbe>(
     new NpgsqlPostgresReadinessProbe(builder.Configuration.GetConnectionString("Postgres")));
+builder.Services.AddDbContext<ProductMasterDataDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
 builder.Services
     .AddHealthChecks()

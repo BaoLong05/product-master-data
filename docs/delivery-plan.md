@@ -8,7 +8,7 @@ Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL
 
 ## Phase 1 — API foundation (in progress)
 
-The operational API foundation provides liveness/readiness health endpoints, a PostgreSQL readiness probe, consistent Problem Details for unmatched routes, a generated OpenAPI document, and API integration tests. Remaining foundation work includes structured logging, EF Core/migrations, and database-backed integration-test setup. The first product-data API must be chosen after schema and authorization decisions.
+The operational API foundation provides liveness/readiness health endpoints, a PostgreSQL readiness probe, consistent Problem Details for unmatched routes, a generated OpenAPI document, and API integration tests. The first PostgreSQL catalog schema and EF Core migration now store all 27 source values as nullable text, with partial unique M.CODE and active-list indexes. Remaining foundation work includes structured logging and database-backed integration-test setup. The first product-data API must follow authentication/authorization enforcement.
 
 ## Phase 2 — identity and permissions
 

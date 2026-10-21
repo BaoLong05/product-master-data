@@ -10,6 +10,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
+    "db:migrate": "dotnet tool run dotnet-ef database update --project src/ProductMasterData.Infrastructure/ProductMasterData.Infrastructure.csproj --startup-project src/ProductMasterData.Api/ProductMasterData.Api.csproj",
     "api:build": "dotnet build ProductMasterData.slnx",
     "api:test": "dotnet test ProductMasterData.slnx",
     "check": "bun run build:web && bun run lint:web && bun run api:build && bun run api:test"

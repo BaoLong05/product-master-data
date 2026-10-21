@@ -21,11 +21,21 @@ Edit `.env` and replace `POSTGRES_PASSWORD`; do not commit `.env`. Then run:
 ```sh
 bun install
 bun run db:up
+dotnet tool restore
 ```
 
 The Compose service binds PostgreSQL only to `127.0.0.1:15432` by default (override with `POSTGRES_PORT` if needed), uses health checks and a named volume. Database is not exposed to other computers by default.
 
 ## Start processes
+
+Before the first migration, configure the API connection string with the same local database credentials. In PowerShell, in the terminal that will run the API:
+
+```powershell
+$env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_master_data;Username=product_master_data;Password=<same value as POSTGRES_PASSWORD in .env>"
+bun run db:migrate
+```
+
+Use the same PowerShell terminal for `bun run db:migrate` and `dotnet run`; replace the placeholder locally and never paste the password into chat or commit it.
 
 Terminal 1 (frontend):
 
@@ -65,7 +75,7 @@ bun run db:logs
 bun run db:down
 ```
 
-`db:down` preserves the named volume. Never use `docker compose down -v` unless permanent data deletion is intended and a verified backup exists. Backup/restore commands and migration procedures will be added with the database implementation.
+`bun run db:migrate` applies checked-in EF Core migrations additively; it does not reset or drop the PostgreSQL volume. `db:down` preserves the named volume. Never use `docker compose down -v` unless permanent data deletion is intended and a verified backup exists. Backup/restore commands will be added with the operations-hardening phase.
 
 ## Troubleshooting
 
