@@ -16,6 +16,92 @@ namespace ProductMasterData.Api.Tests;
 public sealed class LocalLoginEndpointTests
 {
     [Fact]
+    public async Task Antiforgery_endpoint_issues_secure_cookie_and_request_token()
+    {
+        using var factory = new LoginApiFactory();
+        using var client = CreateHttpsClient(factory);
+
+        using var response = await client.GetAsync("/api/v1/auth/csrf");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies, cookie => cookie.Contains("HttpOnly", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(cookies, cookie => cookie.Contains("Secure", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(cookies, cookie => cookie.Contains("SameSite=Strict", StringComparison.OrdinalIgnoreCase));
+        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>();
+        Assert.False(string.IsNullOrWhiteSpace(payload?.RequestToken));
+    }
+
+    [Fact]
+    public async Task Authenticated_user_can_logout_and_subsequent_identity_request_is_unauthorized()
+    {
+        const string userName = "logout.test";
+        const string password = "A-strong-logout-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        using var client = CreateHttpsClient(factory);
+        await AddAntiforgeryTokenAsync(client);
+        using var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(userName, password));
+        Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+        await AddAntiforgeryTokenAsync(client);
+        using var authenticatedIdentity = await client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, authenticatedIdentity.StatusCode);
+
+        using var logout = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        Assert.True(logout.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies, cookie => cookie.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+        using var identityAfterLogout = await client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, identityAfterLogout.StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_without_or_with_invalid_antiforgery_token_does_not_end_session()
+    {
+        const string userName = "logout.csrf.test";
+        const string password = "A-strong-logout-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        using var client = CreateHttpsClient(factory);
+        await AddAntiforgeryTokenAsync(client);
+        using var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(userName, password));
+        Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+        await AddAntiforgeryTokenAsync(client);
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+
+        using var logout = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, logout.StatusCode);
+        Assert.False(logout.Headers.Contains("Set-Cookie"));
+        using var identity = await client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, identity.StatusCode);
+
+        await AddAntiforgeryTokenAsync(client);
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+        client.DefaultRequestHeaders.Add("X-CSRF-TOKEN", "invalid-token");
+        using var invalidTokenLogout = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, invalidTokenLogout.StatusCode);
+        Assert.False(invalidTokenLogout.Headers.Contains("Set-Cookie"));
+        using var identityAfterInvalidToken = await client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, identityAfterInvalidToken.StatusCode);
+    }
+
+    [Fact]
+    public async Task Anonymous_user_cannot_logout()
+    {
+        using var factory = new LoginApiFactory();
+        using var client = CreateHttpsClient(factory);
+        await AddAntiforgeryTokenAsync(client);
+
+        using var logout = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, logout.StatusCode);
+        Assert.False(logout.Headers.Contains("Set-Cookie"));
+    }
+
+    [Fact]
     public async Task Login_without_antiforgery_token_is_rejected_before_credentials_are_checked()
     {
         using var factory = new LoginApiFactory();
@@ -156,13 +242,9 @@ public sealed class LocalLoginEndpointTests
     {
         using var tokenResponse = await client.GetAsync("/api/v1/auth/csrf");
         Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
-        Assert.True(tokenResponse.Headers.TryGetValues("Set-Cookie", out var cookies));
-        Assert.Contains(cookies, cookie => cookie.Contains("HttpOnly", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(cookies, cookie => cookie.Contains("Secure", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(cookies, cookie => cookie.Contains("SameSite=Strict", StringComparison.OrdinalIgnoreCase));
-
         var response = await tokenResponse.Content.ReadFromJsonAsync<CsrfTokenResponse>();
         Assert.False(string.IsNullOrWhiteSpace(response?.RequestToken));
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         client.DefaultRequestHeaders.Add("X-CSRF-TOKEN", response!.RequestToken);
     }
 }

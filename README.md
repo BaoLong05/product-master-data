@@ -45,4 +45,4 @@ Stopping Compose does not delete the named database volume. To permanently delet
 
 ## First administrator and production status
 
-The API supports an explicit first-admin bootstrap and local login, but does not yet provide logout, account management, permission enforcement, or CRUD APIs. Migrations create catalog and identity/permission tables, but no user, role, or product data is seeded. Do not expose this scaffold to a network or treat it as production-ready. Setup and security behavior will be documented as those features are implemented.
+The API supports explicit first-admin bootstrap, local login with CSRF validation and login throttling, and local cookie logout. It does not yet provide account management, permission enforcement, or CRUD APIs. Migrations create catalog and identity/permission tables, but no user, role, or product data is seeded. Do not expose this scaffold to a network or treat it as production-ready. Logout clears the browser's cookie; copied cookies are not revoked server-side.

@@ -5,7 +5,7 @@ Status: implemented acceptance criteria for CSRF defense and login throttling.
 ## CSRF contract
 
 - `GET /api/v1/auth/csrf` issues/refreshes the antiforgery cookie and returns a request token as JSON.
-- State-changing cookie-authenticated endpoints, beginning with `POST /api/v1/auth/login`, require that request token in `X-CSRF-TOKEN` and validate its cookie pair.
+- State-changing cookie-authenticated endpoints (`POST /api/v1/auth/login` and `/api/v1/auth/logout`) require that request token in `X-CSRF-TOKEN` and validate its cookie pair.
 - A missing or invalid token is rejected before credentials are processed and never issues an auth cookie.
 - Antiforgery tokens are not logged. The response token is intentionally available to same-origin browser code; the associated cookie remains HttpOnly, Secure, and SameSite=Strict.
 
