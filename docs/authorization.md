@@ -1,6 +1,6 @@
 # Authentication and authorization design
 
-Status: planned; no authentication or permission enforcement exists in the scaffold. All access must be deny-by-default once API endpoints are added.
+Status: local first-admin bootstrap and cookie login exist, including CSRF validation and login throttling. Permission enforcement and account/role management are still pending; all application data access must remain deny-by-default.
 
 ## Permission model
 
@@ -45,7 +45,7 @@ Authorization is verified on every API request, including direct object access, 
 
 ## Authentication and audit requirements
 
-Use framework-supported adaptive password hashing; no default credentials. Accounts are local/internal: an administrator creates users and assigns roles; there is no public self-registration or external identity provider. Document first-admin bootstrap as an explicit one-time local operation. Select a browser auth/session mechanism with CSRF protection and secure cookie settings appropriate to deployment. Rate-limit login attempts and avoid account-enumeration messages.
+Use framework-supported adaptive password hashing; no default credentials. Accounts are local/internal: an administrator creates users and assigns roles; there is no public self-registration or external identity provider. Document first-admin bootstrap as an explicit one-time local operation. Use antiforgery request-token validation with secure cookie settings. Login is currently limited to five requests per client IP per minute; use generic authentication failures to avoid account enumeration. Reassess limits/proxy IP handling before deployment beyond localhost.
 
 Audit sensitive record changes/deletes, import commits, exports, user/role/permission changes with actor, UTC timestamp, action, target, outcome, correlation ID and safe metadata. Audit events are append-only to normal application users; avoid recording passwords, tokens, or full spreadsheet row values.
 

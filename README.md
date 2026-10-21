@@ -31,7 +31,7 @@ bun run db:migrate
 dotnet run --project src/ProductMasterData.Api
 ```
 
-The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. `bun run db:migrate` applies the product catalog and local identity/permission schemas. Product CRUD, account provisioning/login, and permission enforcement are not implemented yet.
+The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. `bun run db:migrate` applies the product catalog and local identity/permission schemas. First-admin bootstrap, local cookie login, CSRF tokens, and login throttling are implemented; CRUD, account management, logout, and permission enforcement remain pending.
 
 ## Root commands
 
@@ -45,4 +45,4 @@ Stopping Compose does not delete the named database volume. To permanently delet
 
 ## First administrator and production status
 
-Authentication behavior, account bootstrap, and CRUD APIs are not implemented. Migrations create catalog and identity/permission tables, but no user, role, or product data is seeded. Do not expose this scaffold to a network or treat it as production-ready. Setup and security behavior will be documented as those features are implemented.
+The API supports an explicit first-admin bootstrap and local login, but does not yet provide logout, account management, permission enforcement, or CRUD APIs. Migrations create catalog and identity/permission tables, but no user, role, or product data is seeded. Do not expose this scaffold to a network or treat it as production-ready. Setup and security behavior will be documented as those features are implemented.

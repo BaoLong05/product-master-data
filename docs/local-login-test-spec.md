@@ -1,6 +1,6 @@
 # Local username/password login test specification
 
-Status: acceptance criteria for the next authentication slice. Account creation/bootstrap and secure cookie authentication infrastructure exist; this slice adds the browser login contract.
+Status: implemented login contract. CSRF defense and login throttling are covered by `authentication-security-test-spec.md`.
 
 ## Contract: `POST /api/v1/auth/login`
 
@@ -21,4 +21,4 @@ Status: acceptance criteria for the next authentication slice. Account creation/
 
 ## Out of scope
 
-Logout, account-management endpoints, rate limiting/lockout policy, password reset/change, CSRF token distribution, role/permission resolution, and frontend login UI. These must be addressed in follow-on slices before internet/LAN exposure; deployment remains local-only.
+Logout, account-management endpoints, password reset/change, role/permission resolution, and frontend login UI remain out of scope. Deployment remains local-only.
