@@ -1,6 +1,6 @@
 # Database schema design
 
-Status: initial schema design; business decisions applied where confirmed. PostgreSQL is the system of record. This first migration implements the product-record table only; identity, import history, and audit tables are designed below and will be migrated alongside their application slices so no unused subsystems are shipped prematurely.
+Status: product catalog and local identity/permission persistence are migrated. PostgreSQL is the system of record. Import history and audit tables remain designed below and will be migrated alongside their application slices so no unused subsystems are shipped prematurely.
 
 ## Confirmed invariants
 
@@ -28,18 +28,19 @@ Indexes/constraints:
 - Index `(is_deleted, updated_at DESC)` for active-record listing.
 - No other uniqueness constraints or required business fields.
 
-## Planned related tables (not yet migrated)
+## Implemented identity/permission tables
 
-1. `app_users`: UUID ID, normalized unique login/email, password hash, active flag, created/updated timestamps, concurrency version. No plaintext password or default credential.
-2. `roles`: UUID ID, unique role key/name, display name, built-in flag, timestamps.
-3. `permissions`: stable permission key primary key and description.
-4. `user_roles`: composite key `(user_id, role_id)`; foreign keys restrict accidental loss of the last administrator.
-5. `role_permissions`: composite key `(role_id, permission_key)`.
-6. `import_batches`: UUID ID, initiating user, safe source filename, content hash, status, started/completed timestamps and row counts. Do not retain original workbook by default.
-7. `import_row_errors`: batch ID, source row number, optional source header, stable error code and safe message; do not persist raw cell values by default.
-8. `audit_events`: append-only event ID, nullable actor for bootstrap/system actions, UTC timestamp, action, target, outcome, correlation ID and safe JSON metadata. No credentials or full spreadsheet rows.
+ASP.NET Core Identity supplies `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, `AspNetUserClaims`, `AspNetRoleClaims`, `AspNetUserLogins`, and `AspNetUserTokens`. User/role entities and user-role assignments use GUID identifiers; ancillary Identity tables use the framework's standard key shapes. `AspNetUsers` contains an `IsActive` flag and Identity's password-hash field; it never stores plaintext passwords. `NormalizedUserName` is uniquely indexed. Email uniqueness/login semantics are not configured until the login identifier is confirmed. `AspNetRoles` has an `IsBuiltIn` flag.
 
-Add the related tables and foreign keys only when their corresponding identity/import/audit vertical slices are implemented and tested. Import commit, duplicate reporting, authentication, role assignment, and audit policies remain enforced by application services; database constraints provide integrity, not authorization.
+`permissions` stores the 22 stable keys from `docs/authorization.md`; they are seeded once by migration. `role_permissions` has composite key `(role_id, permission_key)`, a foreign key to `AspNetRoles`, and a restrictive foreign key to the permission catalog. Role-to-user assignment uses Identity's `AspNetUserRoles` composite key. These are persistence structures only: no user, role, or administrator is seeded, and login, permission enforcement, last-admin protection, and role-assignment APIs are not implemented yet.
+
+## Planned import and audit tables (not yet migrated)
+
+1. `import_batches`: UUID ID, initiating user, safe source filename, content hash, status, started/completed timestamps and row counts. Do not retain original workbook by default.
+2. `import_row_errors`: batch ID, source row number, optional source header, stable error code and safe message; do not persist raw cell values by default.
+3. `audit_events`: append-only event ID, nullable actor for bootstrap/system actions, UTC timestamp, action, target, outcome, correlation ID and safe JSON metadata. No credentials or full spreadsheet rows.
+
+Add import/audit tables and their foreign keys when those vertical slices are implemented and tested. Import commit, duplicate reporting, and audit policies remain enforced by application services; database constraints provide integrity, not authorization.
 
 ## Risks and follow-up decisions
 

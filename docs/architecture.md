@@ -1,6 +1,6 @@
 # Architecture (proposed)
 
-Status: initial target design; the first product-record schema and migration are implemented, while business APIs and identity/import schemas remain pending.
+Status: target design. Product-record and local identity/permission schemas are migrated; authentication/account-management behavior, business APIs, and import persistence remain pending.
 
 ## Runtime components
 
