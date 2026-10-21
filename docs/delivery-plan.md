@@ -4,7 +4,7 @@ This is an implementation sequence, not a claim that features exist. Deliver one
 
 ## Phase 0 — documentation and bootstrap (complete)
 
-Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript scaffold are in place. No product-record schema or CRUD behavior exists yet.
+Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript scaffold are in place. The product-record schema is implemented; CRUD behavior is not.
 
 ## Phase 1 — API foundation (in progress)
 
@@ -12,7 +12,7 @@ The operational API foundation provides liveness/readiness health endpoints, a P
 
 ## Phase 2 — identity and permissions
 
-Local admin bootstrap, authentication, permission catalog, role and user management, checkbox UI, server-side authorization, audit trail, and permission matrix integration tests. Do not ship broad CRUD before authorization behavior is enforceable.
+Persisted local identity/role/permission schema and the permission catalog are implemented. Remaining: safe first-admin bootstrap, login/logout, user and role management, checkbox UI, server-side authorization, audit trail, and permission-matrix integration tests. Do not ship broad CRUD before authorization behavior is enforceable.
 
 ## Phase 3 — record management
 
