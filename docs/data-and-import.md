@@ -1,6 +1,6 @@
 # Data and Excel import
 
-Status: proposed based on inspection of `Sample Input Form.xlsx`; confirm business rules before migrations/API implementation.
+Status: proposed based on inspection of `Sample Input Form.xlsx`; key and duplicate rules confirmed by the user. Remaining type, field-length, and normalization decisions must be confirmed before schema/API implementation.
 
 ## Observed workbook
 
@@ -42,14 +42,15 @@ Keep source labels and raw values available for traceability. Do not assume a sp
 
 ## Decisions required before production schema
 
-- Which source field(s) form the unique key? Is `Item Code` unique across companies/statuses?
+- `M.CODE` is the unique key when present. Because records may be saved with fields missing, a blank/null `M.CODE` is allowed and is not treated as a duplicate key; enforce uniqueness for non-empty values and use it to detect existing records and duplicates within an import batch.
 - Required columns and valid domain values for product type/status/region/approval.
-- Re-import behavior: reject duplicates, skip, or update; define conflict reporting.
+- No source field is required to save a record; records may contain missing fields. Apply type/length validation independently of requiredness.
+- On duplicates, skip the affected row, report its source row number and reason, and never overwrite an existing record. Apply consistently to records already stored and repeated keys within a single import.
 - Preserve all 27 columns as typed fields, or normalize some into related entities.
 - How to interpret date-only and local date/time fields; blank, malformed and out-of-range values.
 - Whether to retain original uploaded files and for how long.
 
-Until agreed, do not invent unique constraints, destructive upsert behavior, mandatory fields, or data deletion policy.
+Do not invent other unique constraints, destructive upsert behavior, mandatory fields, or data deletion policy.
 
 ## Safe import flow
 
