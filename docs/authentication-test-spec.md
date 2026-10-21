@@ -15,4 +15,4 @@ Status: the anonymous current-identity contract is implemented. Local login is s
 - `Current_identity_endpoint_rejects_anonymous_requests` calls the endpoint through `WebApplicationFactory`, asserts 401, and verifies the response does not disclose identity/grant fields.
 - The generated OpenAPI document lists the protected current-identity route.
 
-This current-identity slice does not add logout, roles/permissions resolution, CSRF token distribution, or any product-record API.
+This current-identity slice does not add logout, roles/permissions resolution, or any product-record API.

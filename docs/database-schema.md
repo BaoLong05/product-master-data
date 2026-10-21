@@ -32,7 +32,7 @@ Indexes/constraints:
 
 ASP.NET Core Identity supplies `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, `AspNetUserClaims`, `AspNetRoleClaims`, `AspNetUserLogins`, and `AspNetUserTokens`. User/role entities and user-role assignments use GUID identifiers; ancillary Identity tables use the framework's standard key shapes. `AspNetUsers` contains an `IsActive` flag and Identity's password-hash field; it never stores plaintext passwords. `NormalizedUserName` is uniquely indexed. Email uniqueness/login semantics are not configured until the login identifier is confirmed. `AspNetRoles` has an `IsBuiltIn` flag.
 
-`permissions` stores the 22 stable keys from `docs/authorization.md`; they are seeded once by migration. `role_permissions` has composite key `(role_id, permission_key)`, a foreign key to `AspNetRoles`, and a restrictive foreign key to the permission catalog. Role-to-user assignment uses Identity's `AspNetUserRoles` composite key. These are persistence structures only: no user, role, or administrator is seeded, and login, permission enforcement, last-admin protection, and role-assignment APIs are not implemented yet.
+`permissions` stores the 22 stable keys from `docs/authorization.md`; they are seeded once by migration. `role_permissions` has composite key `(role_id, permission_key)`, a foreign key to `AspNetRoles`, and a restrictive foreign key to the permission catalog. Role-to-user assignment uses Identity's `AspNetUserRoles` composite key. No user, role, or administrator is seeded by migration. Bootstrap/login exist; permission enforcement, last-admin protection, and role-assignment APIs remain unimplemented.
 
 ## Planned import and audit tables (not yet migrated)
 

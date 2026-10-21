@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Antiforgery;
+using System.Threading.RateLimiting;
 using System.Security.Claims;
 using ProductMasterData.Api.Health;
 using ProductMasterData.Application.Health;
@@ -32,6 +34,27 @@ builder.Services
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+});
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "ProductMasterData.Antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+});
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -55,15 +78,30 @@ builder.Services
 
 var app = builder.Build();
 app.UseStatusCodePages();
+app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 app.MapOpenApi();
 app.MapProductHealthEndpoints();
+app.MapGet("/api/v1/auth/csrf", (HttpContext httpContext, IAntiforgery antiforgery) =>
+{
+    var tokens = antiforgery.GetAndStoreTokens(httpContext);
+    return Results.Ok(new AntiforgeryTokenResponse(tokens.RequestToken));
+})
+    .AllowAnonymous();
 app.MapPost("/api/v1/auth/login", async (
     LoginRequest request,
     UserManager<ApplicationUser> userManager,
+    IAntiforgery antiforgery,
     HttpContext httpContext) =>
 {
+    if (!await antiforgery.IsRequestValidAsync(httpContext))
+    {
+        return Results.BadRequest();
+    }
+
     if (string.IsNullOrWhiteSpace(request.UserName) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.BadRequest();
@@ -90,6 +128,7 @@ app.MapPost("/api/v1/auth/login", async (
         new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
     return Results.NoContent();
 })
+    .RequireRateLimiting("login")
     .AllowAnonymous();
 app.MapGet("/api/v1/auth/me", (ClaimsPrincipal user) => Results.Ok(new CurrentIdentityResponse(
         user.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -100,5 +139,6 @@ app.Run();
 
 internal sealed record CurrentIdentityResponse(string? UserId, string? Email);
 internal sealed record LoginRequest(string? UserName, string? Password);
+internal sealed record AntiforgeryTokenResponse(string? RequestToken);
 
 public partial class Program { }
