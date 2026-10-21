@@ -6,7 +6,7 @@ Status: proposed baseline for implementation. This repository currently has no s
 
 The sample workbook contains one `DATA` sheet, Excel table `Form_Responses`, 27 columns and about 9,986 rows. It combines Vietnamese/English/Korean labels, text identifiers, dates, checkbox values, notes, URLs, and `IMAGE(...)` formulas. Some cells in the date-formatted column L contain serial values outside Excel date bounds. Import must preserve original values where safe, flag invalid dates, and never silently coerce them. Treat image formulas as untrusted input: extract only supported URL references, never evaluate formulas. Initially retain image/file URLs as text; do not fetch remote content during import.
 
-Business decisions still required: authoritative unique key / duplicate policy; which fields are required; whether to preserve the exact 27-column schema or normalize; import re-run behavior (skip/update/reject); account model and who administers accounts; backup/retention expectations. Until agreed, make behavior configurable/explicit and do not invent destructive defaults.
+Confirmed business decisions: non-empty `M.CODE` values are unique; blank/null `M.CODE` is permitted because no field is required; duplicate rows are skipped with source row and reason reported, never overwritten; accounts are local/internal, with administrators creating users and assigning roles. Still to decide: whether to preserve the exact 27-column schema or normalize; date/time semantics; backup/retention expectations. Until agreed, do not invent destructive defaults.
 
 ## 2. Proposed local-first stack
 

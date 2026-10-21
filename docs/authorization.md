@@ -45,7 +45,7 @@ Authorization is verified on every API request, including direct object access, 
 
 ## Authentication and audit requirements
 
-Use framework-supported adaptive password hashing; no default credentials. Document first-admin bootstrap as an explicit one-time local operation. Select a browser auth/session mechanism with CSRF protection and secure cookie settings appropriate to deployment. Rate-limit login attempts and avoid account-enumeration messages.
+Use framework-supported adaptive password hashing; no default credentials. Accounts are local/internal: an administrator creates users and assigns roles; there is no public self-registration or external identity provider. Document first-admin bootstrap as an explicit one-time local operation. Select a browser auth/session mechanism with CSRF protection and secure cookie settings appropriate to deployment. Rate-limit login attempts and avoid account-enumeration messages.
 
 Audit sensitive record changes/deletes, import commits, exports, user/role/permission changes with actor, UTC timestamp, action, target, outcome, correlation ID and safe metadata. Audit events are append-only to normal application users; avoid recording passwords, tokens, or full spreadsheet row values.
 
