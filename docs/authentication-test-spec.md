@@ -1,6 +1,6 @@
 # Authentication pipeline test specification
 
-Status: first identity vertical slice; authentication persistence, account management, and login are not implemented yet.
+Status: the anonymous current-identity contract is implemented. Local login is specified in `local-login-test-spec.md`.
 
 ## Contract: `GET /api/v1/auth/me`
 
@@ -8,11 +8,11 @@ Status: first identity vertical slice; authentication persistence, account manag
 - The endpoint must be protected by server-side authorization, not frontend-only route checks.
 - The unauthenticated response contains no user, role, permission, or credential information.
 - An authenticated session receives only the current principal's user ID and email; role/permission resolution is deferred until persistence and authorization are implemented.
-- Authentication uses an application cookie; cookie issuance/login is a later slice after persisted users and password verification exist.
+- Authentication uses the configured secure application cookie. Login issuance and credential validation are specified separately.
 
 ## Automated acceptance case
 
 - `Current_identity_endpoint_rejects_anonymous_requests` calls the endpoint through `WebApplicationFactory`, asserts 401, and verifies the response does not disclose identity/grant fields.
 - The generated OpenAPI document lists the protected current-identity route.
 
-This slice does not add user storage, login/logout, roles, permissions, first-admin bootstrap, CSRF-protected state-changing requests, or any product-record API.
+This current-identity slice does not add logout, roles/permissions resolution, CSRF token distribution, or any product-record API.
