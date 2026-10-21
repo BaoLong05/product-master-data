@@ -81,6 +81,20 @@ public sealed class ApiHealthEndpointTests
         var paths = document.RootElement.GetProperty("paths");
         Assert.True(paths.TryGetProperty("/health/live", out _));
         Assert.True(paths.TryGetProperty("/health/ready", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/auth/me", out _));
+    }
+
+    [Fact]
+    public async Task Current_identity_endpoint_rejects_anonymous_requests()
+    {
+        using var factory = new ApiFactory(databaseIsHealthy: true);
+        using var response = await factory.CreateClient().GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("user", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("role", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("permission", body, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed record HealthResponse(string Status);

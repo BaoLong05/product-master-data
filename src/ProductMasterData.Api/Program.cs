@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
 using ProductMasterData.Api.Health;
 using ProductMasterData.Application.Health;
 using ProductMasterData.Infrastructure.Health;
@@ -6,6 +8,25 @@ using ProductMasterData.Infrastructure.Health;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
+builder.Services.AddAuthorization();
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -24,8 +45,17 @@ builder.Services
 
 var app = builder.Build();
 app.UseStatusCodePages();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapOpenApi();
 app.MapProductHealthEndpoints();
+app.MapGet("/api/v1/auth/me", (ClaimsPrincipal user) => Results.Ok(new CurrentIdentityResponse(
+        user.FindFirstValue(ClaimTypes.NameIdentifier),
+        user.FindFirstValue(ClaimTypes.Email)))
+    )
+    .RequireAuthorization();
 app.Run();
+
+internal sealed record CurrentIdentityResponse(string? UserId, string? Email);
 
 public partial class Program { }
