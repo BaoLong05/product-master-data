@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -252,6 +253,12 @@ public sealed class LocalLoginEndpointTests
 public sealed class LoginApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = Guid.NewGuid().ToString();
+    private readonly bool _removeSecurityStampOnSignIn;
+
+    public LoginApiFactory(bool removeSecurityStampOnSignIn = false)
+    {
+        _removeSecurityStampOnSignIn = removeSecurityStampOnSignIn;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -265,6 +272,27 @@ public sealed class LoginApiFactory : WebApplicationFactory<Program>
             services.AddIdentityCore<ApplicationUser>()
                 .AddRoles<ApplicationRole>()
                 .AddEntityFrameworkStores<ProductMasterDataDbContext>();
+            if (_removeSecurityStampOnSignIn)
+            {
+                services.PostConfigure<CookieAuthenticationOptions>(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    options => options.Events.OnSigningIn = context =>
+                    {
+                        if (context.Principal is not null)
+                        {
+                            var claimType = new IdentityOptions().ClaimsIdentity.SecurityStampClaimType;
+                            foreach (var identity in context.Principal.Identities)
+                            {
+                                foreach (var claim in identity.FindAll(claimType).ToArray())
+                                {
+                                    identity.RemoveClaim(claim);
+                                }
+                            }
+                        }
+
+                        return Task.CompletedTask;
+                    });
+            }
         });
     }
 
@@ -275,6 +303,17 @@ public sealed class LoginApiFactory : WebApplicationFactory<Program>
         await database.Database.EnsureCreatedAsync();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var result = await users.CreateAsync(new ApplicationUser { UserName = userName, IsActive = isActive }, password);
+        Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(error => error.Description)));
+    }
+
+    public async Task DeactivateUserAsync(string userName)
+    {
+        using var scope = Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await users.FindByNameAsync(userName);
+        Assert.NotNull(user);
+        user.IsActive = false;
+        var result = await users.UpdateAsync(user);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(error => error.Description)));
     }
 }

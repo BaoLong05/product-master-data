@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using System.Threading.RateLimiting;
 using System.Security.Claims;
 using ProductMasterData.Api.Health;
+using ProductMasterData.Api.Identity;
 using ProductMasterData.Application.Health;
 using ProductMasterData.Infrastructure.Identity;
 using ProductMasterData.Infrastructure.Health;
@@ -22,6 +23,10 @@ builder.Services
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Events.OnValidatePrincipal = context =>
+            context.HttpContext.RequestServices
+                .GetRequiredService<ActiveUserCookieValidator>()
+                .ValidateAsync(context);
         options.Events.OnRedirectToLogin = context =>
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -70,6 +75,7 @@ builder.Services.AddDbContext<ProductMasterDataDbContext>(options =>
 builder.Services.AddIdentityCore<ApplicationUser>()
     .AddRoles<ApplicationRole>()
     .AddEntityFrameworkStores<ProductMasterDataDbContext>();
+builder.Services.AddScoped<ActiveUserCookieValidator>();
 
 builder.Services
     .AddHealthChecks()
@@ -94,6 +100,7 @@ app.MapGet("/api/v1/auth/csrf", (HttpContext httpContext, IAntiforgery antiforge
 app.MapPost("/api/v1/auth/login", async (
     LoginRequest request,
     UserManager<ApplicationUser> userManager,
+    IUserClaimsPrincipalFactory<ApplicationUser> claimsPrincipalFactory,
     IAntiforgery antiforgery,
     HttpContext httpContext) =>
 {
@@ -113,30 +120,40 @@ app.MapPost("/api/v1/auth/login", async (
         return Results.Unauthorized();
     }
 
-    var claims = new List<Claim>
-    {
-        new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-        new(ClaimTypes.Name, user.UserName ?? string.Empty)
-    };
-    if (!string.IsNullOrWhiteSpace(user.Email))
-    {
-        claims.Add(new Claim(ClaimTypes.Email, user.Email));
-    }
-
+    var principal = await claimsPrincipalFactory.CreateAsync(user);
     await httpContext.SignInAsync(
         CookieAuthenticationDefaults.AuthenticationScheme,
-        new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
+        principal);
     return Results.NoContent();
 })
     .RequireRateLimiting("login")
     .AllowAnonymous();
 app.MapPost("/api/v1/auth/logout", async (
+    UserManager<ApplicationUser> userManager,
     IAntiforgery antiforgery,
     HttpContext httpContext) =>
 {
     if (!await antiforgery.IsRequestValidAsync(httpContext))
     {
         return Results.BadRequest();
+    }
+
+    var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userManager.FindByIdAsync(userId);
+    if (user is null || !user.IsActive)
+    {
+        return Results.Unauthorized();
+    }
+
+    var stampUpdate = await userManager.UpdateSecurityStampAsync(user);
+    if (!stampUpdate.Succeeded)
+    {
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
 
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

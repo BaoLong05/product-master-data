@@ -24,4 +24,4 @@ Status: implemented acceptance criteria for CSRF defense and login throttling.
 
 ## Scope boundary
 
-No logout endpoint or UI in this slice. All state-changing cookie-authenticated routes added later must opt into the same antiforgery requirement. Deployment stays local-only; this does not by itself make the app internet/LAN ready.
+This specification defines the CSRF/login-throttle slice only; logout is separately covered by `local-logout-test-spec.md` and session revocation by `cookie-session-revocation-test-spec.md`. All state-changing cookie-authenticated routes must opt into the same antiforgery requirement. Deployment stays local-only; these controls do not by themselves make the app internet/LAN ready.
