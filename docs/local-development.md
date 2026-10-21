@@ -52,7 +52,7 @@ $env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_m
 dotnet run --project src/ProductMasterData.Api
 ```
 
-`GET /health/live` reports process liveness without checking PostgreSQL. `GET /health/ready` returns 200 only when PostgreSQL accepts a query; otherwise it returns 503 with a generic status and no connection details. Unmatched routes return Problem Details with a trace ID and no internal exception details. The generated OpenAPI document is available at `/openapi/v1.json`. `bun run db:migrate` applies the initial `product_records` schema. There are no product-record APIs, user persistence/login, or permission enforcement yet. The frontend is the unmodified Vite starter pending product UI work.
+`GET /health/live` reports process liveness without checking PostgreSQL. `GET /health/ready` returns 200 only when PostgreSQL accepts a query; otherwise it returns 503 with a generic status and no connection details. Unmatched routes return Problem Details with a trace ID and no internal exception details. The generated OpenAPI document is available at `/openapi/v1.json`. `GET /api/v1/auth/me` is protected by the application cookie-authentication pipeline and returns 401 to anonymous requests. User persistence, login/logout, roles, and permission enforcement are not implemented yet. There are no record endpoints or schema migrations. The frontend is the unmodified Vite starter pending product UI work.
 
 ## Checks
 
