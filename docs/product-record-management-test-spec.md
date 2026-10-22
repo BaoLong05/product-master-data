@@ -1,14 +1,15 @@
 # Product record entry and browse test specification
 
-Status: list/create, audited editing, and audited soft-delete are implemented as local-only vertical slices. Audit persistence rules are covered by `docs/product-record-audit-test-spec.md`; update and soft-delete contracts are covered by their focused test specs. Search/filter, restore, and other workflows remain open.
+Status: list/create, audited editing, audited soft-delete, and catalog search/filter are implemented as local-only vertical slices. Audit persistence rules are covered by `docs/product-record-audit-test-spec.md`; update, soft-delete, and search/filter contracts are covered by their focused test specs. Restore and other workflows remain open.
 
 ## User workflow
 
-An administrator signs in, views active product records, and creates a record while preserving the original spreadsheet values. The first delivery is a usable list/create workflow; edit, delete, search/filter, and Excel import remain later work.
+An administrator signs in, views active product records, searches across all source fields or filters selected fields, and creates a record while preserving the original spreadsheet values. The catalog also supports audited edit and soft-delete; Excel import remains later work.
 
 ## API contract
 
 - `GET /api/v1/records` requires `records.read`, returns only non-deleted rows, ordered by `UpdatedAt` descending then `Id` ascending. `page` defaults to 1, `pageSize` defaults to 50 and must be 1–100. Response includes items, page, pageSize, and totalCount.
+- Optional `q` on the list route performs case-insensitive substring search across all 27 source fields. Each source field's camelCase name is also an optional case-insensitive substring filter. Search and filters combine with AND; `q` searches fields with OR. Count and pagination apply after filtering. Unknown query keys and repeated values return 400.
 - `GET /api/v1/records/{id}` requires `records.read`; deleted or unknown records return 404.
 - `POST /api/v1/records` requires `records.create` and a valid antiforgery token. It accepts all 27 source fields as nullable text, returns 201 and a resolvable Location.
 - `PUT /api/v1/records/{id}` requires `records.update` and a valid antiforgery token. It replaces all source fields and requires the current `version`; stale versions return 409. Successful updates increment the version and append a `records.updated` audit event atomically.
@@ -21,6 +22,7 @@ An administrator signs in, views active product records, and creates a record wh
 
 - A signed-out user sees a username/password form and generic login failure messages.
 - A signed-in user can browse the paged list, open the create form, save a record with optional fields, see success/error feedback, and return to the refreshed list.
+- A signed-in user can search globally and expand a filter form containing all 27 source fields. Applying or clearing search/filter criteria resets pagination to page 1; an empty filtered result has a clear/reset action.
 - Authentication uses the existing secure cookie and antiforgery token flow; the UI does not store credentials or tokens in local storage.
 - Layout remains usable on narrow screens; the wide record table scrolls within its own region rather than clipping the page.
 
@@ -28,6 +30,8 @@ An administrator signs in, views active product records, and creates a record wh
 
 - `User_with_record_permissions_can_create_and_retrieve_a_nullable_record` verifies create, nullable fields, and the returned resource location.
 - `User_with_read_permission_can_browse_a_page_of_active_records` verifies default/explicit pagination and the persisted list response.
+- `Global_search_matches_all_source_fields_and_paginates_filtered_results`, `Field_filter_matches_partial_value_case_insensitively_and_rejects_unknown_filter`, and `Global_search_and_field_filters_cover_all_source_fields` verify all-field search/filter, casing, AND behavior, unknown fields, and pagination.
+- Frontend `buildCatalogQuery` tests verify pagination and all 27 filter keys are serialized, and blank criteria are omitted.
 - `Anonymous_record_routes_return_unauthorized` checks list, detail, and create are inaccessible anonymously.
 - `Create_without_create_permission_is_forbidden_and_does_not_persist` checks deny-by-default writes.
 - `Create_without_antiforgery_token_is_rejected_without_persisting` checks CSRF rejection has no database side effect.
@@ -44,4 +48,4 @@ An administrator signs in, views active product records, and creates a record wh
 
 ## Out of scope
 
-Record restore/permanent erasure, search/filter/sort controls, role/user administration, full import workflow, typed parsing, audit-history UI, and exposing the app to LAN/internet. Do not invent max lengths or mandatory fields without an approved rule.
+Record restore/permanent erasure, sorting, role/user administration, full import workflow, typed parsing, audit-history UI, and exposing the app to LAN/internet. Do not invent max lengths or mandatory fields without an approved rule.
