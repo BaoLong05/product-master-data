@@ -10,8 +10,11 @@ using System.Security.Claims;
 using ProductMasterData.Api.Health;
 using ProductMasterData.Api.Catalog;
 using ProductMasterData.Api.Identity;
+using ProductMasterData.Api.Imports;
 using ProductMasterData.Application.Health;
+using ProductMasterData.Application.Imports;
 using ProductMasterData.Infrastructure.Identity;
+using ProductMasterData.Infrastructure.Imports;
 using ProductMasterData.Infrastructure.Health;
 using ProductMasterData.Infrastructure.Persistence;
 
@@ -79,6 +82,7 @@ builder.Services.AddIdentityCore<ApplicationUser>()
     .AddRoles<ApplicationRole>()
     .AddEntityFrameworkStores<ProductMasterDataDbContext>();
 builder.Services.AddScoped<ActiveUserCookieValidator>();
+builder.Services.AddSingleton<IWorkbookPreviewReader, OpenXmlWorkbookPreviewReader>();
 
 builder.Services
     .AddHealthChecks()
@@ -95,6 +99,7 @@ app.UseAntiforgery();
 app.MapOpenApi();
 app.MapProductHealthEndpoints();
 app.MapProductRecordEndpoints();
+app.MapImportPreviewEndpoints();
 app.MapGet("/api/v1/auth/csrf", (HttpContext httpContext, IAntiforgery antiforgery) =>
 {
     var tokens = antiforgery.GetAndStoreTokens(httpContext);

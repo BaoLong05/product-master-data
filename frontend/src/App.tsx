@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { buildCatalogQuery } from './catalog-search'
+import { createImportPreviewRequest } from './import-preview'
 import './App.css'
 
 type CurrentIdentity = { userId: string | null; email: string | null }
@@ -48,6 +49,7 @@ type ProductRecordPage = {
   totalCount: number
 }
 type ProductRecordDetail = ProductRecordForm & { id: string; version: number }
+type ImportPreview = { worksheets: { name: string; headers: (string | null)[] }[] }
 
 const pageSize = 50
 const formFields: { key: keyof ProductRecordForm; label: string; multiline?: boolean }[] = [
@@ -129,6 +131,10 @@ function App() {
   const [saveBusy, setSaveBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [logoutBusy, setLogoutBusy] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
+  const [importError, setImportError] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -191,6 +197,28 @@ function App() {
     setFiltersDraft(emptyForm())
     setFilters(emptyForm())
     setPage(1)
+  }
+
+  const handlePreviewImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setImportError('')
+    setImportPreview(null)
+    if (!importFile) {
+      setImportError('Vui lòng chọn tệp .xlsx để xem trước.')
+      return
+    }
+
+    setImportBusy(true)
+    try {
+      const token = await requestAntiforgeryToken()
+      const response = await fetch('/api/v1/imports/preview', createImportPreviewRequest(importFile, token))
+      if (!response.ok) throw new Error(await responseMessage(response))
+      setImportPreview(await response.json() as ImportPreview)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Không thể đọc tệp Excel.')
+    } finally {
+      setImportBusy(false)
+    }
   }
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -392,6 +420,38 @@ function App() {
             </form>
           </section>
         )}
+
+        <section className="form-card import-preview-card" aria-labelledby="import-preview-title">
+          <div className="section-heading">
+            <div><p className="eyebrow">NHẬP DỮ LIỆU · BƯỚC 1</p><h2 id="import-preview-title">Kiểm tra tệp Excel</h2></div>
+          </div>
+          <p className="form-hint">Tải tệp .xlsx để xem tên sheet và tiêu đề cột. Bước này chỉ đọc thông tin cấu trúc, chưa lưu hay nhập bất kỳ hồ sơ nào.</p>
+          {importError && <p className="alert alert-error" role="alert">{importError}</p>}
+          <form className="import-preview-form" onSubmit={(event) => void handlePreviewImport(event)}>
+            <label className="sr-only" htmlFor="import-workbook">Chọn tệp Excel .xlsx</label>
+            <input
+              id="import-workbook"
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setImportError('') }}
+            />
+            <button className="button button-secondary" type="submit" disabled={importBusy || !importFile}>
+              {importBusy ? 'Đang kiểm tra…' : 'Xem sheet và tiêu đề'}
+            </button>
+          </form>
+          {importPreview && (
+            <div className="import-worksheets" aria-live="polite">
+              {importPreview.worksheets.map((sheet) => (
+                <section className="import-worksheet" key={sheet.name}>
+                  <h3>{sheet.name}</h3>
+                  {sheet.headers.length ? (
+                    <ol>{sheet.headers.map((header, index) => <li key={`${sheet.name}-${index}`}>{header || `Cột ${index + 1} (trống)`}</li>)}</ol>
+                  ) : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
 
         <section className="catalog-card" aria-labelledby="records-title">
           <div className="catalog-toolbar">

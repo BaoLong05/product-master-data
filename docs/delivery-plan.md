@@ -18,9 +18,9 @@ Persisted local identity/role/permission schema and the permission catalog, safe
 
 Delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, signed-in React list/create/edit/soft-delete UI, and catalog search/filter. Global search performs case-insensitive substring matching across all 27 source fields; each source field also has an individual substring filter. Search and filters combine with pagination on active records. Record create/update/soft-delete write append-only audit events. Update and soft-delete require current versions and increment them to prevent stale overwrites. Remaining: restore/permanent-erasure policy, PostgreSQL-backed concurrent API tests for record mutations, audit-history UI, and broader UI permission affordances. Import/export and identity-change audit are not implemented.
 
-## Phase 4 — safe Excel import
+## Phase 4 — safe Excel import (in progress)
 
-Parser and fixtures, upload limits, mapping, preview, row-level validation, invalid date/formula/link handling, duplicate policy, transactional/idempotent commit, error report, import history, authorization, and tests with the supplied workbook.
+Delivered first slice: authenticated `imports.preview`-protected `.xlsx` upload with antiforgery validation, a 10 MiB limit, read-only Open XML worksheet/header inspection, and a React structural-preview screen. It performs no business writes and retains no uploaded file. Remaining: source-header mapping, bounded row preview/validation, formula/date/link/duplicate error reporting, idempotent transactional commit, import history/audit, and testing with the supplied workbook. Large-sheet header inspection is covered by a synthetic fixture; the original sample workbook is not present in the repository and has not been exercised.
 
 ## Phase 5 — operations hardening
 

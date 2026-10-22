@@ -21,6 +21,14 @@
 .button-quiet { color: #53666d; border-color: #dfe7e9; background: #fff; }
 .button-quiet:hover:not(:disabled) { border-color: #b7c6ca; background: #f7f9fa; }
 .catalog-card, .form-card { border: 1px solid #e5ecee; border-radius: 14px; background: #fff; box-shadow: 0 5px 18px rgba(25, 53, 64, .035); }
+.import-preview-card { margin-bottom: 22px; }
+.import-preview-form { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.import-preview-form input { max-width: 100%; color: #53686e; font-size: 12px; }
+.import-worksheets { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.import-worksheet { min-width: 0; padding: 14px; border: 1px solid #e5ecee; border-radius: 10px; background: #fbfcfc; }
+.import-worksheet h3 { margin: 0 0 10px; color: #29434a; font-size: 13px; }
+.import-worksheet ol { max-height: 240px; margin: 0; padding-left: 24px; overflow: auto; color: #607177; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.import-worksheet p { margin: 0; color: #809096; font-size: 11px; }
 .catalog-card { overflow: hidden; }
 .catalog-toolbar { min-height: 76px; padding: 17px 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #edf1f2; }
 .catalog-toolbar h2, .section-heading h2 { margin: 0; color: #213940; font: 700 16px Inter, ui-sans-serif, sans-serif; letter-spacing: -.02em; }
