@@ -13,7 +13,7 @@ Advance the existing read-only workbook preview toward explicit column mapping b
 - Mark every occurrence of a repeated nonblank header as duplicate. Blank cells are reported as blank columns, not as duplicate business fields.
 - List source headers not present in the workbook as missing. These are informational diagnostics: because no source field is required, missing fields do not block preview or imply invalid product records.
 - List nonblank headers that are not an exact known source header as unfamiliar. Do not discard them or assign them to a target field.
-- Show recognized exact headers as recognized, but do not treat recognition as a saved mapping. Explicit mapping remains a later step requiring user selection.
+- Show recognized exact headers as recognized, but do not treat recognition as a saved mapping. A separate component now supports explicit user-selected mapping; recognition itself never changes those selections.
 - Keep the existing raw-row preview and formula hiding behavior unchanged.
 - Diagnostics are client-side and read-only. They do not alter the workbook, API request/response, records, import batches, or audit events.
 
@@ -23,11 +23,11 @@ Advance the existing read-only workbook preview toward explicit column mapping b
 2. Every occurrence of a repeated known header is marked duplicate and its source field is not reported missing.
 3. Non-exact nonblank headers are unfamiliar and preserved verbatim; blank headers are separately reported.
 4. Recognition does not produce or persist a mapping; diagnostics never block or mutate the existing preview flow.
-5. The rendered UI identifies recognized, duplicate, unfamiliar, blank, and missing-header conditions accessibly and explains that no mapping/import has occurred.
+5. The rendered diagnostics identify recognized, duplicate, unfamiliar, blank, and missing-header conditions accessibly and explain that recognition does not auto-map or import.
 
 ## Non-goals
 
-- Automatic or user-selected column-to-field mapping.
+- Automatic mapping; user-selected mapping behavior is covered by `product-record-import-column-mapping-test-spec.md`.
 - Header aliases, normalization, required-column policy, or import eligibility decisions.
 - Cell-value/date/URL/duplicate-record validation, import confirmation, persistence, or audit changes.
 - Changes to the protected preview API contract or Open XML parser.
