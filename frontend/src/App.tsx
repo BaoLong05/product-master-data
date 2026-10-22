@@ -38,6 +38,7 @@ type ProductRecordListItem = {
   companyName: string | null
   productStatus: string | null
   updatedAt: string
+  version: number
 }
 type ProductRecordPage = {
   items: ProductRecordListItem[]
@@ -264,6 +265,24 @@ function App() {
     }
   }
 
+  const handleDelete = async (record: ProductRecordListItem) => {
+    if (!window.confirm(`Xóa mềm hồ sơ ${record.mCode || record.itemName || record.id}? Hồ sơ sẽ được giữ lại trong lịch sử.`)) return
+    setNotice('')
+    try {
+      const requestToken = await requestAntiforgeryToken()
+      const response = await fetch(`/api/v1/records/${record.id}?version=${record.version}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-TOKEN': requestToken },
+      })
+      if (!response.ok) throw new Error(await responseMessage(response))
+      setListVersion((version) => version + 1)
+      setNotice('Đã chuyển hồ sơ vào trạng thái đã xóa mềm.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Không thể xóa hồ sơ.')
+    }
+  }
+
   if (!identity) {
     return (
       <main className="login-page">
@@ -366,7 +385,7 @@ function App() {
                     <td>{record.companyName || '—'}</td>
                     <td><span className="status-pill">{record.productStatus || 'Chưa cập nhật'}</span></td>
                     <td className="date-cell">{new Date(record.updatedAt).toLocaleDateString('vi-VN')}</td>
-                    <td><button className="button button-quiet" type="button" onClick={() => void handleEdit(record.id)}>Sửa</button></td>
+                    <td><div className="pagination-actions"><button className="button button-quiet" type="button" onClick={() => void handleEdit(record.id)}>Sửa</button><button className="button button-quiet" type="button" onClick={() => void handleDelete(record)}>Xóa</button></div></td>
                   </tr>
                 ))}
               </tbody>

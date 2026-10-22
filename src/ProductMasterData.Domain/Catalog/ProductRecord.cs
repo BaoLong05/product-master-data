@@ -42,4 +42,15 @@ public sealed class ProductRecord
         Version++;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
+
+    public void SoftDelete()
+    {
+        if (IsDeleted)
+        {
+            throw new InvalidOperationException("A deleted product record cannot be deleted again.");
+        }
+
+        IsDeleted = true;
+        AdvanceVersion();
+    }
 }

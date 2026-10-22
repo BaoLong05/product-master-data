@@ -267,6 +267,111 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
+    public async Task User_with_delete_permission_can_soft_delete_a_record_with_an_audit_event()
+    {
+        const string userName = "record.delete.test";
+        const string password = "A-strong-record-delete-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.delete", "records.read");
+        var recordId = await SeedRecordAsync(factory, "DELETE-001", "Retained source value");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.DeleteAsync($"/api/v1/records/{recordId}?version=1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(1, await CountRecordsAsync(factory));
+        Assert.Equal(1, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        var retained = await database.ProductRecords.SingleAsync(item => item.Id == recordId);
+        Assert.True(retained.IsDeleted);
+        Assert.Equal("Retained source value", retained.ItemName);
+        Assert.Equal(2, retained.Version);
+        var auditEvent = await database.AuditEvents.SingleAsync();
+        Assert.Equal("records.deleted", auditEvent.Action);
+        Assert.DoesNotContain("Retained source value", auditEvent.MetadataJson, StringComparison.Ordinal);
+        using var repeatedDelete = await client.DeleteAsync($"/api/v1/records/{recordId}?version=2");
+        Assert.Equal(HttpStatusCode.NotFound, repeatedDelete.StatusCode);
+        Assert.Equal(1, await CountAuditEventsAsync(factory));
+        using var detail = await client.GetAsync($"/api/v1/records/{recordId}");
+        Assert.Equal(HttpStatusCode.NotFound, detail.StatusCode);
+        using var list = await client.GetAsync("/api/v1/records");
+        var page = await list.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Empty(page!.Items);
+    }
+
+    [Fact]
+    public async Task Delete_without_delete_permission_is_forbidden_and_does_not_persist()
+    {
+        const string userName = "record.delete.denied.test";
+        const string password = "A-strong-record-delete-denied-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        var recordId = await SeedRecordAsync(factory, "DELETE-DENIED-001", "Keep this value");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.DeleteAsync($"/api/v1/records/{recordId}?version=1");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.False((await database.ProductRecords.SingleAsync(item => item.Id == recordId)).IsDeleted);
+    }
+
+    [Fact]
+    public async Task Delete_without_antiforgery_token_is_rejected_without_persisting()
+    {
+        const string userName = "record.delete.csrf.test";
+        const string password = "A-strong-record-delete-csrf-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.delete");
+        var recordId = await SeedRecordAsync(factory, "DELETE-CSRF-001", "Keep this value");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+
+        using var response = await client.DeleteAsync($"/api/v1/records/{recordId}?version=1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.False((await database.ProductRecords.SingleAsync(item => item.Id == recordId)).IsDeleted);
+    }
+
+    [Fact]
+    public async Task Delete_with_stale_version_is_conflict_and_preserves_record()
+    {
+        const string userName = "record.delete.stale.test";
+        const string password = "A-strong-record-delete-stale-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.update", "records.delete");
+        var recordId = await SeedRecordAsync(factory, "DELETE-STALE-001", "Original value");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var update = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        {
+            version = 1,
+            mCode = "DELETE-STALE-001",
+            itemName = "Updated value"
+        });
+        using var staleDelete = await client.DeleteAsync($"/api/v1/records/{recordId}?version=1");
+
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, staleDelete.StatusCode);
+        Assert.Equal(1, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        var retained = await database.ProductRecords.SingleAsync(item => item.Id == recordId);
+        Assert.False(retained.IsDeleted);
+        Assert.Equal("Updated value", retained.ItemName);
+    }
+
+    [Fact]
     public async Task Create_without_create_permission_is_forbidden_and_does_not_persist()
     {
         const string userName = "record.denied.test";
@@ -293,12 +398,14 @@ public sealed class ProductRecordEndpointTests
         using var auditResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}/audit");
         using var createResponse = await client.PostAsJsonAsync("/api/v1/records", new { itemName = "Anonymous" });
         using var updateResponse = await client.PutAsJsonAsync($"/api/v1/records/{Guid.NewGuid()}", new { version = 1, itemName = "Anonymous" });
+        using var deleteResponse = await client.DeleteAsync($"/api/v1/records/{Guid.NewGuid()}?version=1");
 
         Assert.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, detailResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, auditResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, createResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, updateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode);
         Assert.Equal(0, await CountRecordsAsync(factory));
         Assert.Equal(0, await CountAuditEventsAsync(factory));
     }

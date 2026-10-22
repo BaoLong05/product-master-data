@@ -29,6 +29,8 @@ public static class ProductRecordEndpoints
             .RequireAuthorization(PermissionPolicies.For("records.create"));
         records.MapPut("/{id:guid}", UpdateAsync)
             .RequireAuthorization(PermissionPolicies.For("records.update"));
+        records.MapDelete("/{id:guid}", DeleteAsync)
+            .RequireAuthorization(PermissionPolicies.For("records.delete"));
         return endpoints;
     }
 
@@ -59,7 +61,8 @@ public static class ProductRecordEndpoints
                     record.ItemName,
                     record.CompanyName,
                     record.ProductStatus,
-                    record.UpdatedAt))
+                    record.UpdatedAt,
+                    record.Version))
                 .ToListAsync(cancellationToken);
 
         return Results.Ok(new ProductRecordPageResponse(items, page, pageSize, totalCount));
@@ -276,6 +279,58 @@ public static class ProductRecordEndpoints
         return Results.Ok(ToResponse(record));
     }
 
+    private static async Task<IResult> DeleteAsync(
+        Guid id,
+        long version,
+        ProductMasterDataDbContext database,
+        IAntiforgery antiforgery,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!await antiforgery.IsRequestValidAsync(httpContext))
+        {
+            return Results.BadRequest();
+        }
+
+        if (!Guid.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var record = await database.ProductRecords
+            .SingleOrDefaultAsync(item => item.Id == id && !item.IsDeleted, cancellationToken);
+        if (record is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (record.Version != version)
+        {
+            return Results.Conflict(new ApiErrorResponse("record_version_conflict", "The record has changed. Reload it before deleting."));
+        }
+
+        var previousVersion = record.Version;
+        record.SoftDelete();
+        database.AuditEvents.Add(AuditEvent.Create(
+            actorId,
+            "records.deleted",
+            RecordTarget(record.Id),
+            "succeeded",
+            httpContext.TraceIdentifier,
+            JsonSerializer.Serialize(new { recordId = record.Id, previousVersion, version = record.Version })));
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new ApiErrorResponse("record_version_conflict", "The record has changed. Reload it before deleting."));
+        }
+
+        return Results.NoContent();
+    }
+
     private static IResult DuplicateMCode() =>
         Results.Conflict(new ApiErrorResponse("duplicate_m_code", "A record with this M.CODE already exists."));
 
@@ -430,7 +485,8 @@ public sealed record ProductRecordListItemResponse(
     string? ItemName,
     string? CompanyName,
     string? ProductStatus,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    long Version);
 
 public sealed record ProductRecordPageResponse(
     IReadOnlyList<ProductRecordListItemResponse> Items,
