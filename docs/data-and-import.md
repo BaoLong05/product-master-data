@@ -1,6 +1,6 @@
 # Data and Excel import
 
-Status: initial record schema implemented. The first migration preserves all 27 source values as nullable text; typed parsing/derived columns remain pending confirmed date/time, decimal, vocabulary, and normalization rules.
+Status: initial record schema implemented. The first migration preserves all 27 source values as nullable text; typed parsing/derived columns remain pending confirmed date/time, decimal, vocabulary, and normalization rules. A protected, stateless `.xlsx` worksheet/header inspection preview is implemented; row validation, mapping, and import/commit remain pending.
 
 ## Observed workbook
 
@@ -63,6 +63,15 @@ See `database-schema.md` for the initial storage design and planned identity/imp
 7. Store only necessary metadata; default to deleting temporary workbook after processing unless retention is approved.
 
 Imported links are never fetched server-side: avoids SSRF and unexpected external data transfer. Render spreadsheet text as text (not HTML); allow only safe clickable URL schemes in the client.
+
+## Implemented structural-preview slice
+
+- `POST /api/v1/imports/preview` accepts one multipart `file`, requires authentication, `imports.preview`, and a valid antiforgery token.
+- Only `.xlsx` is accepted; the uploaded file is capped at 10 MiB. Workbooks are opened read-only with the Open XML SDK. Preview is bounded to 20 worksheets, 100 columns in the first header row, and 1,000,000 XML characters per part. Worksheet rows and shared strings are read sequentially only as far as needed for headers.
+- The response contains each worksheet name and its first-row header text. Formula cells are not evaluated; formula-derived header values are omitted. External links are not fetched.
+- The upload is not retained. This endpoint does not create an import batch, product record, or audit event. The React screen displays worksheet/header text as text and clearly states that no records are imported.
+- This is structural inspection only: it does not map columns, preview product rows, validate cell values/dates/URLs/duplicates, or allow commit. Server-side processing is synchronously bounded by upload and XML-part limits; import-wide time/resource limits and streaming row validation remain outstanding.
+- Uploads beyond the multipart/request limits may be rejected by ASP.NET Core with HTTP 413 before the endpoint returns its structured 400 errors.
 
 ## Date and value handling
 
