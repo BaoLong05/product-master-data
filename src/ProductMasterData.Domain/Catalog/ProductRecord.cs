@@ -36,4 +36,10 @@ public sealed class ProductRecord
     public DateTimeOffset UpdatedAt { get; private set; } = DateTimeOffset.UtcNow;
     public bool IsDeleted { get; private set; }
     public long Version { get; private set; } = 1;
+
+    public void AdvanceVersion()
+    {
+        Version++;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
 }

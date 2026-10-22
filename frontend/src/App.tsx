@@ -45,6 +45,7 @@ type ProductRecordPage = {
   pageSize: number
   totalCount: number
 }
+type ProductRecordDetail = ProductRecordForm & { id: string; version: number }
 
 const pageSize = 50
 const formFields: { key: keyof ProductRecordForm; label: string; multiline?: boolean }[] = [
@@ -116,6 +117,7 @@ function App() {
   const [listBusy, setListBusy] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<ProductRecordForm>(emptyForm)
+  const [editingRecord, setEditingRecord] = useState<{ id: string; version: number } | null>(null)
   const [formError, setFormError] = useState('')
   const [saveBusy, setSaveBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -210,6 +212,8 @@ function App() {
       setIdentity(null)
       setRecordPage(null)
       setFormOpen(false)
+      setEditingRecord(null)
+      setForm(emptyForm())
       setSessionError('')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Không thể đăng xuất.')
@@ -224,14 +228,15 @@ function App() {
     setSaveBusy(true)
     try {
       const requestToken = await requestAntiforgeryToken()
-      const response = await fetch('/api/v1/records', {
-        method: 'POST',
+      const response = await fetch(editingRecord ? `/api/v1/records/${editingRecord.id}` : '/api/v1/records', {
+        method: editingRecord ? 'PUT' : 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': requestToken },
-        body: JSON.stringify(form),
+        body: JSON.stringify(editingRecord ? { ...form, version: editingRecord.version } : form),
       })
       if (!response.ok) throw new Error(await responseMessage(response))
       setForm(emptyForm())
+      setEditingRecord(null)
       setFormOpen(false)
       setPage(1)
       setListVersion((version) => version + 1)
@@ -240,6 +245,22 @@ function App() {
       setFormError(error instanceof Error ? error.message : 'Không thể lưu hồ sơ sản phẩm.')
     } finally {
       setSaveBusy(false)
+    }
+  }
+
+  const handleEdit = async (id: string) => {
+    setFormError('')
+    setNotice('')
+    try {
+      const response = await fetch(`/api/v1/records/${id}`, { credentials: 'same-origin' })
+      if (!response.ok) throw new Error(await responseMessage(response))
+      const record = await response.json() as ProductRecordDetail
+      const values = Object.fromEntries(formFields.map(({ key }) => [key, record[key] ?? ''])) as ProductRecordForm
+      setForm(values)
+      setEditingRecord({ id: record.id, version: record.version })
+      setFormOpen(true)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Không thể tải hồ sơ để chỉnh sửa.')
     }
   }
 
@@ -291,7 +312,7 @@ function App() {
             <h1>Hồ sơ sản phẩm</h1>
             <p className="page-subtitle">Danh sách tập trung và các giá trị gốc của dữ liệu sản phẩm.</p>
           </div>
-          <button className="button button-primary" type="button" onClick={() => { setFormError(''); setFormOpen((open) => !open) }}>
+          <button className="button button-primary" type="button" onClick={() => { setFormError(''); setEditingRecord(null); setForm(emptyForm()); setFormOpen((open) => !open) }}>
             <span aria-hidden="true">＋</span> Tạo hồ sơ
           </button>
         </div>
@@ -301,10 +322,10 @@ function App() {
         {formOpen && (
           <section className="form-card" aria-labelledby="form-title">
             <div className="section-heading">
-              <div><p className="eyebrow">HỒ SƠ MỚI</p><h2 id="form-title">Thông tin sản phẩm</h2></div>
-              <button className="button button-quiet" type="button" onClick={() => setFormOpen(false)}>Đóng</button>
+              <div><p className="eyebrow">{editingRecord ? 'CHỈNH SỬA HỒ SƠ' : 'HỒ SƠ MỚI'}</p><h2 id="form-title">Thông tin sản phẩm</h2></div>
+              <button className="button button-quiet" type="button" onClick={() => { setFormOpen(false); setEditingRecord(null) }}>Đóng</button>
             </div>
-            <p className="form-hint">Tất cả trường đều không bắt buộc. Giá trị được lưu dưới dạng văn bản; M.CODE phải duy nhất nếu được nhập.</p>
+            <p className="form-hint">Tất cả trường đều không bắt buộc. Giá trị được lưu dưới dạng văn bản; M.CODE phải duy nhất nếu được nhập. Khi chỉnh sửa, các trường để trống sẽ được lưu là rỗng.</p>
             {formError && <p className="alert alert-error" role="alert">{formError}</p>}
             <form onSubmit={handleSave}>
               <div className="form-grid">
@@ -320,8 +341,8 @@ function App() {
                 ))}
               </div>
               <div className="form-actions">
-                <button className="button button-quiet" type="button" onClick={() => setFormOpen(false)}>Hủy</button>
-                <button className="button button-primary" type="submit" disabled={saveBusy}>{saveBusy ? 'Đang lưu…' : 'Lưu hồ sơ'}</button>
+                <button className="button button-quiet" type="button" onClick={() => { setFormOpen(false); setEditingRecord(null) }}>Hủy</button>
+                <button className="button button-primary" type="submit" disabled={saveBusy}>{saveBusy ? 'Đang lưu…' : editingRecord ? 'Lưu thay đổi' : 'Lưu hồ sơ'}</button>
               </div>
             </form>
           </section>
@@ -336,7 +357,7 @@ function App() {
           <div className="table-scroll" aria-busy={listBusy}>
             <table>
               <caption className="sr-only">Danh sách hồ sơ sản phẩm</caption>
-              <thead><tr><th scope="col">M.CODE</th><th scope="col">Tên sản phẩm</th><th scope="col">Công ty</th><th scope="col">Trạng thái</th><th scope="col">Cập nhật</th></tr></thead>
+              <thead><tr><th scope="col">M.CODE</th><th scope="col">Tên sản phẩm</th><th scope="col">Công ty</th><th scope="col">Trạng thái</th><th scope="col">Cập nhật</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead>
               <tbody>
                 {recordPage?.items.map((record) => (
                   <tr key={record.id}>
@@ -345,6 +366,7 @@ function App() {
                     <td>{record.companyName || '—'}</td>
                     <td><span className="status-pill">{record.productStatus || 'Chưa cập nhật'}</span></td>
                     <td className="date-cell">{new Date(record.updatedAt).toLocaleDateString('vi-VN')}</td>
+                    <td><button className="button button-quiet" type="button" onClick={() => void handleEdit(record.id)}>Sửa</button></td>
                   </tr>
                 ))}
               </tbody>

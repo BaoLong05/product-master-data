@@ -154,6 +154,119 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
+    public async Task User_with_update_permission_can_replace_a_record_and_audit_the_change()
+    {
+        const string userName = "record.update.test";
+        const string password = "A-strong-record-update-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.update");
+        var recordId = await SeedRecordAsync(factory, "UPDATE-001", "Before edit");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        {
+            version = 1,
+            mCode = "UPDATE-001",
+            itemName = "After edit",
+            note = "private source value"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await response.Content.ReadFromJsonAsync<ProductRecordResponse>();
+        Assert.Equal("After edit", updated?.ItemName);
+        Assert.Equal(2, updated?.Version);
+        Assert.Equal(1, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        var auditEvent = await database.AuditEvents.SingleAsync();
+        Assert.Equal("records.updated", auditEvent.Action);
+        Assert.DoesNotContain("private source value", auditEvent.MetadataJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Update_without_update_permission_is_forbidden_and_does_not_persist()
+    {
+        const string userName = "record.update.denied.test";
+        const string password = "A-strong-record-update-denied-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        var recordId = await SeedRecordAsync(factory, "UPDATE-DENIED-001", "Keep this value");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        {
+            version = 1,
+            mCode = "UPDATE-DENIED-001",
+            itemName = "Must not persist"
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal("Keep this value", (await database.ProductRecords.SingleAsync(item => item.Id == recordId)).ItemName);
+    }
+
+    [Fact]
+    public async Task Update_with_stale_version_is_conflict_without_a_second_audit_event()
+    {
+        const string userName = "record.update.stale.test";
+        const string password = "A-strong-record-update-stale-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.update");
+        var recordId = await SeedRecordAsync(factory, "UPDATE-STALE-001", "Original");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var firstResponse = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        {
+            version = 1,
+            mCode = "UPDATE-STALE-001",
+            itemName = "First edit"
+        });
+        using var staleResponse = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        {
+            version = 1,
+            mCode = "UPDATE-STALE-001",
+            itemName = "Stale overwrite"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
+        Assert.Equal(1, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal("First edit", (await database.ProductRecords.SingleAsync(item => item.Id == recordId)).ItemName);
+    }
+
+    [Fact]
+    public async Task Update_with_duplicate_m_code_is_conflict_without_changing_the_record_or_audit()
+    {
+        const string userName = "record.update.duplicate.test";
+        const string password = "A-strong-record-update-duplicate-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.update");
+        var recordId = await SeedRecordAsync(factory, "UPDATE-UNIQUE-001", "Original item");
+        await SeedRecordAsync(factory, "UPDATE-TAKEN-001", "Other item");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        {
+            version = 1,
+            mCode = "UPDATE-TAKEN-001",
+            itemName = "Must not persist"
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal("Original item", (await database.ProductRecords.SingleAsync(item => item.Id == recordId)).ItemName);
+    }
+
+    [Fact]
     public async Task Create_without_create_permission_is_forbidden_and_does_not_persist()
     {
         const string userName = "record.denied.test";
@@ -179,11 +292,13 @@ public sealed class ProductRecordEndpointTests
         using var detailResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}");
         using var auditResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}/audit");
         using var createResponse = await client.PostAsJsonAsync("/api/v1/records", new { itemName = "Anonymous" });
+        using var updateResponse = await client.PutAsJsonAsync($"/api/v1/records/{Guid.NewGuid()}", new { version = 1, itemName = "Anonymous" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, detailResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, auditResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, updateResponse.StatusCode);
         Assert.Equal(0, await CountRecordsAsync(factory));
         Assert.Equal(0, await CountAuditEventsAsync(factory));
     }
@@ -234,7 +349,7 @@ public sealed class ProductRecordEndpointTests
     private sealed record CsrfTokenResponse(string? RequestToken);
     private sealed record ProductRecordPageResponse(IReadOnlyList<ProductRecordListItem> Items, int Page, int PageSize, int TotalCount);
     private sealed record ProductRecordListItem(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? ProductStatus, DateTimeOffset UpdatedAt);
-    private sealed record ProductRecordResponse(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? Note);
+    private sealed record ProductRecordResponse(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? Note, long Version);
     private sealed record ProductRecordAuditResponse(
         Guid EventId,
         Guid? ActorId,

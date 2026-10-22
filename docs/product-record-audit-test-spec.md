@@ -1,10 +1,12 @@
 # Product record audit test specification
 
-Status: implemented for successful product-record creation, with a permission-protected API read route and PostgreSQL append-only enforcement. Audit for updates, deletes, imports, exports, and identity/permission changes remains open; the React UI does not yet render the history.
+Status: implemented for successful product-record creation and update, with a permission-protected API read route and PostgreSQL append-only enforcement. Audit for deletes, imports, exports, and identity/permission changes remains open; the React UI does not yet render the history.
 
 ## User and security behavior
 
 When an authorized user creates a product record, the application persists one append-only audit event in the same database transaction as the record. The event records the authenticated actor ID, UTC occurrence time, action `records.created`, target record ID, outcome `succeeded`, and a server-generated request correlation ID. Metadata is limited to the record ID; source fields such as `M.CODE`, notes, URLs, credentials, and full request bodies are not copied into the audit log.
+
+When an authorized user updates a record, the application persists one `records.updated` event in the same `SaveChanges` transaction. Metadata contains only the record ID and previous/current version numbers. The update request must include its observed version; stale concurrent writes return 409.
 
 An authorized auditor can read the audit events for a record through `GET /api/v1/records/{id}/audit`, which requires `audit.read`. `records.read` alone does not grant audit access. Unknown records return 404. No API operation may update or delete audit events.
 
@@ -13,6 +15,7 @@ An authorized auditor can read the audit events for a record through `GET /api/v
 - Create with `records.create`, then read the record audit with `audit.read`: return 201 for creation and exactly one event with the correct actor, record target, action, successful outcome, UTC timestamp, nonempty correlation ID, and safe metadata.
 - `records.read` without `audit.read` cannot read audit events (403); anonymous access is denied (401).
 - Rejected create requests (authorization, antiforgery, and duplicate non-empty `M.CODE`) leave both record and audit counts unchanged.
+- Successful update increments the record version and appends one safe `records.updated` event; stale versions and duplicate non-empty M.CODE values are rejected without a successful audit event.
 - An audit persistence failure must not leave a product record committed; a relational-provider test verifies the shared `SaveChanges` transaction rollback.
 - The PostgreSQL schema has an additive `audit_events` table with nullable actor FK, UTC timestamp, action, target, outcome, correlation ID and JSONB metadata. Application/API callers have no update/delete path for events.
 
@@ -21,6 +24,7 @@ An authorized auditor can read the audit events for a record through `GET /api/v
 - `Creating_a_record_writes_a_safe_audit_event_readable_by_an_auditor` verifies actor, UTC time, action, target, outcome, correlation ID, record-ID-only metadata, and that source values are not copied.
 - `Record_read_permission_does_not_grant_audit_read_access` verifies `audit.read` is independent; `Auditor_gets_not_found_for_an_unknown_product_record` verifies unknown IDs return 404; `Anonymous_record_routes_return_unauthorized` includes the audit route.
 - Create-denied, anonymous, missing-CSRF, and duplicate-code endpoint tests verify rejected requests do not append events; the duplicate test expects exactly the one event from the successful create.
+- `User_with_update_permission_can_replace_a_record_and_audit_the_change` verifies update, version increment, and exclusion of source values from audit metadata.
 - `PostgresAuditTests.Audit_events_are_append_only_and_failed_record_creation_rolls_back_its_audit_event` runs the additive migration and verifies `UPDATE`, `DELETE`, `TRUNCATE`, and deleting an actor referenced by an event are rejected; it also proves a uniqueness failure rolls back both a product record and its audit event.
 
 ## RED–GREEN–REFACTOR evidence
