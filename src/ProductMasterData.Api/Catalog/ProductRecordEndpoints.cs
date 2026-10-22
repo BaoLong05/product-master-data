@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
@@ -14,6 +15,36 @@ namespace ProductMasterData.Api.Catalog;
 public static class ProductRecordEndpoints
 {
     private const string MCodeUniqueConstraint = "ux_product_records_m_code_non_empty";
+    private static readonly IReadOnlyDictionary<string, string> SourceFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["dateValue"] = nameof(ProductRecord.DateValue),
+        ["companyName"] = nameof(ProductRecord.CompanyName),
+        ["itemName"] = nameof(ProductRecord.ItemName),
+        ["mCode"] = nameof(ProductRecord.MCode),
+        ["itemCode"] = nameof(ProductRecord.ItemCode),
+        ["productType"] = nameof(ProductRecord.ProductType),
+        ["productStatus"] = nameof(ProductRecord.ProductStatus),
+        ["approvalStatus"] = nameof(ProductRecord.ApprovalStatus),
+        ["sampleOrProductionOrder"] = nameof(ProductRecord.SampleOrProductionOrder),
+        ["companyNameLetters"] = nameof(ProductRecord.CompanyNameLetters),
+        ["oldRegion"] = nameof(ProductRecord.OldRegion),
+        ["sampleSavedDate"] = nameof(ProductRecord.SampleSavedDate),
+        ["picImage"] = nameof(ProductRecord.PicImage),
+        ["purchaseOrder"] = nameof(ProductRecord.PurchaseOrder),
+        ["productionOrderPdf"] = nameof(ProductRecord.ProductionOrderPdf),
+        ["note"] = nameof(ProductRecord.Note),
+        ["printedAt"] = nameof(ProductRecord.PrintedAt),
+        ["discName"] = nameof(ProductRecord.DiscName),
+        ["soi"] = nameof(ProductRecord.Soi),
+        ["maso"] = nameof(ProductRecord.Maso),
+        ["denier"] = nameof(ProductRecord.Denier),
+        ["price"] = nameof(ProductRecord.Price),
+        ["region"] = nameof(ProductRecord.Region),
+        ["quantity"] = nameof(ProductRecord.Quantity),
+        ["picUrl"] = nameof(ProductRecord.PicUrl),
+        ["internalItem"] = nameof(ProductRecord.InternalItem),
+        ["request"] = nameof(ProductRecord.Request)
+    };
 
     public static IEndpointRouteBuilder MapProductRecordEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -36,16 +67,46 @@ public static class ProductRecordEndpoints
 
     private static async Task<IResult> ListAsync(
         ProductMasterDataDbContext database,
+        HttpRequest httpRequest,
         CancellationToken cancellationToken,
         int page = 1,
-        int pageSize = 50)
+        int pageSize = 50,
+        string? q = null)
     {
         if (page < 1 || pageSize is < 1 or > 100)
         {
             return Results.BadRequest(new ApiErrorResponse("invalid_pagination", "Page must be positive and pageSize must be between 1 and 100."));
         }
 
+        var allowedQueryKeys = SourceFields.Keys
+            .Append("q")
+            .Append("page")
+            .Append("pageSize")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (httpRequest.Query.Keys.Any(key => !allowedQueryKeys.Contains(key)))
+        {
+            return Results.BadRequest(new ApiErrorResponse("invalid_query_parameter", "The query contains an unsupported search or filter field."));
+        }
+
+        if (httpRequest.Query.Any(parameter => parameter.Value.Count != 1))
+        {
+            return Results.BadRequest(new ApiErrorResponse("invalid_query_value", "Each search or filter parameter must have exactly one value."));
+        }
+
         var activeRecords = database.ProductRecords.AsNoTracking().Where(record => !record.IsDeleted);
+        if (!string.IsNullOrEmpty(q))
+        {
+            activeRecords = activeRecords.Where(BuildSearchPredicate(q));
+        }
+
+        foreach (var (queryName, propertyName) in SourceFields)
+        {
+            if (httpRequest.Query.TryGetValue(queryName, out var filter) && !string.IsNullOrEmpty(filter[0]))
+            {
+                activeRecords = activeRecords.Where(BuildFieldFilterPredicate(propertyName, filter[0]!));
+            }
+        }
+
         var totalCount = await activeRecords.CountAsync(cancellationToken);
         var offset = (long)(page - 1) * pageSize;
         var items = offset >= totalCount
@@ -66,6 +127,46 @@ public static class ProductRecordEndpoints
                 .ToListAsync(cancellationToken);
 
         return Results.Ok(new ProductRecordPageResponse(items, page, pageSize, totalCount));
+    }
+
+    private static Expression<Func<ProductRecord, bool>> BuildSearchPredicate(string searchText)
+    {
+        var record = Expression.Parameter(typeof(ProductRecord), "record");
+        var toLower = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+        var contains = typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+        Expression? matchAny = null;
+
+        foreach (var propertyName in SourceFields.Values)
+        {
+            var fieldMatches = BuildContainsExpression(Expression.Property(record, propertyName), searchText, toLower, contains);
+            matchAny = matchAny is null ? fieldMatches : Expression.OrElse(matchAny, fieldMatches);
+        }
+
+        return Expression.Lambda<Func<ProductRecord, bool>>(matchAny!, record);
+    }
+
+    private static Expression<Func<ProductRecord, bool>> BuildFieldFilterPredicate(string propertyName, string filterText)
+    {
+        var record = Expression.Parameter(typeof(ProductRecord), "record");
+        var field = Expression.Property(record, propertyName);
+        var toLower = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+        var contains = typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+        return Expression.Lambda<Func<ProductRecord, bool>>(
+            BuildContainsExpression(field, filterText, toLower, contains), record);
+    }
+
+    private static Expression BuildContainsExpression(
+        Expression field,
+        string text,
+        System.Reflection.MethodInfo toLower,
+        System.Reflection.MethodInfo contains)
+    {
+        var notNull = Expression.NotEqual(field, Expression.Constant(null, typeof(string)));
+        var containsText = Expression.Call(
+            Expression.Call(field, toLower),
+            contains,
+            Expression.Constant(text.ToLowerInvariant()));
+        return Expression.AndAlso(notNull, containsText);
     }
 
     private static async Task<IResult> GetByIdAsync(

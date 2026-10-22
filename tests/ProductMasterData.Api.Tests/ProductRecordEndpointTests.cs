@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using ProductMasterData.Domain.Catalog;
 using ProductMasterData.Domain.Identity;
 using ProductMasterData.Infrastructure.Identity;
@@ -151,6 +152,151 @@ public sealed class ProductRecordEndpointTests
         Assert.Equal(1, page.PageSize);
         Assert.Equal(2, page.TotalCount);
         Assert.Single(page.Items);
+    }
+
+    [Fact]
+    public async Task Global_search_matches_all_source_fields_and_paginates_filtered_results()
+    {
+        const string userName = "record.search.test";
+        const string password = "A-strong-record-search-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        var matchId = await SeedRecordAsync(factory, "SEARCH-001", "First result");
+        var secondMatchId = await SeedRecordAsync(factory, "SEARCH-002", "Second result");
+        await SeedRecordAsync(factory, "SEARCH-003", "No matching result");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            var record = await database.ProductRecords.SingleAsync(item => item.Id == matchId);
+            record.Note = "needle-in-a-source-field";
+            var secondRecord = await database.ProductRecords.SingleAsync(item => item.Id == secondMatchId);
+            secondRecord.Note = "needle-in-another-source-field";
+            await database.SaveChangesAsync();
+        }
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.GetAsync("/api/v1/records?q=NEEDLE&page=1&pageSize=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+        Assert.NotNull(page);
+        Assert.Equal(2, page.TotalCount);
+        Assert.Single(page.Items);
+    }
+
+    [Fact]
+    public async Task Field_filter_matches_partial_value_case_insensitively_and_rejects_unknown_filter()
+    {
+        const string userName = "record.filter.test";
+        const string password = "A-strong-record-filter-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        var matchId = await SeedRecordAsync(factory, "FILTER-001", "First result");
+        await SeedRecordAsync(factory, "FILTER-002", "Second result");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            var record = await database.ProductRecords.SingleAsync(item => item.Id == matchId);
+            record.Note = "Exact-Filter-Value";
+            await database.SaveChangesAsync();
+        }
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var filtered = await client.GetAsync("/api/v1/records?note=exact-filter");
+        var page = await filtered.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+        using var combined = await client.GetAsync("/api/v1/records?q=FILTER&note=exact-filter");
+        var combinedPage = await combined.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+        using var unknown = await client.GetAsync("/api/v1/records?unknownField=value");
+        using var repeated = await client.GetAsync("/api/v1/records?note=one&note=two");
+
+        Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
+        Assert.Equal(1, page?.TotalCount);
+        Assert.Equal(matchId, page?.Items.Single().Id);
+        Assert.Equal(1, combinedPage?.TotalCount);
+        Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, repeated.StatusCode);
+    }
+
+    [Fact]
+    public async Task Global_search_and_field_filters_cover_all_source_fields()
+    {
+        const string userName = "record.all-fields.test";
+        const string password = "A-strong-record-all-fields-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        var sourceProperties = typeof(ProductRecord).GetProperties()
+            .Where(property => property.PropertyType == typeof(string))
+            .OrderBy(property => property.Name)
+            .ToArray();
+        Assert.Equal(27, sourceProperties.Length);
+
+        var recordIds = new List<Guid>();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            for (var index = 0; index < sourceProperties.Length; index++)
+            {
+                var recordId = await SeedRecordAsync(factory, $"ALL-FIELDS-{index:00}", $"Ordinary {index}");
+                recordIds.Add(recordId);
+                var record = await database.ProductRecords.SingleAsync(item => item.Id == recordId);
+                sourceProperties[index].SetValue(record, $"search-marker-{index:00}");
+            }
+
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        for (var index = 0; index < sourceProperties.Length; index++)
+        {
+            var property = sourceProperties[index];
+            var marker = $"SEARCH-MARKER-{index:00}";
+            var queryName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+            using var search = await client.GetAsync($"/api/v1/records?q={marker}");
+            using var filter = await client.GetAsync($"/api/v1/records?{queryName}={marker}");
+            var searchPage = await search.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+            var filterPage = await filter.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+
+            Assert.Equal(HttpStatusCode.OK, search.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, filter.StatusCode);
+            Assert.Equal(recordIds[index], Assert.Single(searchPage!.Items).Id);
+            Assert.Equal(recordIds[index], Assert.Single(filterPage!.Items).Id);
+        }
+    }
+
+    [SearchPostgresFact]
+    public async Task PostgreSql_translates_global_search_and_combined_field_filters()
+    {
+        var connection = new NpgsqlConnectionStringBuilder(
+            Environment.GetEnvironmentVariable("PRODUCTMASTERDATA_TEST_SEARCH_POSTGRES"));
+        Assert.Equal("search_test", connection.Database);
+        Assert.Equal("127.0.0.1", connection.Host);
+        using var factory = new LoginApiFactory(postgresConnectionString: connection.ConnectionString);
+        const string userName = "record.postgres-search.test";
+        const string password = "A-strong-record-postgres-search-passphrase-2026";
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        var marker = $"postgres-marker-{Guid.NewGuid():N}";
+        var recordId = await SeedRecordAsync(factory, $"PG-SEARCH-{Guid.NewGuid():N}", "PostgreSQL search");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            var record = await database.ProductRecords.SingleAsync(item => item.Id == recordId);
+            record.Note = marker;
+            record.Region = "North region";
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var response = await client.GetAsync(
+            $"/api/v1/records?q={marker.ToUpperInvariant()}&note=marker&region=NORTH&page=1&pageSize=1");
+        var page = await response.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, page?.TotalCount);
+        Assert.Equal(recordId, page?.Items.Single().Id);
     }
 
     [Fact]
@@ -532,5 +678,16 @@ public sealed class ProductRecordEndpointTests
         database.ProductRecords.Add(record);
         await database.SaveChangesAsync();
         return record.Id;
+    }
+}
+
+public sealed class SearchPostgresFactAttribute : FactAttribute
+{
+    public SearchPostgresFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PRODUCTMASTERDATA_TEST_SEARCH_POSTGRES")))
+        {
+            Skip = "Set PRODUCTMASTERDATA_TEST_SEARCH_POSTGRES to a dedicated disposable PostgreSQL search_test database to run this provider test.";
+        }
     }
 }

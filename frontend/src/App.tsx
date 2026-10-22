@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { buildCatalogQuery } from './catalog-search'
 import './App.css'
 
 type CurrentIdentity = { userId: string | null; email: string | null }
@@ -114,6 +115,11 @@ function App() {
   const [recordPage, setRecordPage] = useState<ProductRecordPage | null>(null)
   const [page, setPage] = useState(1)
   const [listVersion, setListVersion] = useState(0)
+  const [searchDraft, setSearchDraft] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filtersDraft, setFiltersDraft] = useState<ProductRecordForm>(emptyForm)
+  const [filters, setFilters] = useState<ProductRecordForm>(emptyForm)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [listError, setListError] = useState('')
   const [listBusy, setListBusy] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
@@ -149,7 +155,8 @@ function App() {
       setListBusy(true)
       setListError('')
       try {
-        const response = await fetch(`/api/v1/records?page=${page}&pageSize=${pageSize}`, {
+        const query = buildCatalogQuery(page, pageSize, searchTerm, filters)
+        const response = await fetch(`/api/v1/records${query}`, {
           credentials: 'same-origin',
           signal: controller.signal,
         })
@@ -169,7 +176,22 @@ function App() {
       cancelled = true
       controller.abort()
     }
-  }, [identity, page, listVersion])
+  }, [identity, page, listVersion, searchTerm, filters])
+
+  const handleApplySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPage(1)
+    setSearchTerm(searchDraft)
+    setFilters(filtersDraft)
+  }
+
+  const handleClearSearch = () => {
+    setSearchDraft('')
+    setSearchTerm('')
+    setFiltersDraft(emptyForm())
+    setFilters(emptyForm())
+    setPage(1)
+  }
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -215,6 +237,8 @@ function App() {
       setFormOpen(false)
       setEditingRecord(null)
       setForm(emptyForm())
+      handleClearSearch()
+      setFiltersOpen(false)
       setSessionError('')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Không thể đăng xuất.')
@@ -308,6 +332,8 @@ function App() {
   }
 
   const totalPages = Math.max(1, Math.ceil((recordPage?.totalCount ?? 0) / pageSize))
+  const activeFilterCount = formFields.filter(({ key }) => filters[key].trim()).length
+  const hasActiveSearch = Boolean(searchTerm.trim() || activeFilterCount)
 
   return (
     <div className="app-shell">
@@ -373,6 +399,48 @@ function App() {
             <span className="page-indicator">Trang {page}/{totalPages}</span>
           </div>
           {listError && <p className="alert alert-error" role="alert">{listError}</p>}
+          <form className="catalog-search" onSubmit={handleApplySearch}>
+            <div className="search-row">
+              <label className="sr-only" htmlFor="catalog-search-input">Tìm kiếm trên tất cả trường dữ liệu</label>
+              <input
+                id="catalog-search-input"
+                type="search"
+                placeholder="Tìm trong 27 trường dữ liệu…"
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+              />
+              <button
+                className="button button-quiet"
+                type="button"
+                aria-expanded={filtersOpen}
+                aria-controls={filtersOpen ? 'catalog-field-filters' : undefined}
+                onClick={() => setFiltersOpen((open) => !open)}
+              >
+                Bộ lọc {activeFilterCount ? `(${activeFilterCount})` : ''}
+              </button>
+              <button className="button button-primary" type="submit">Tìm kiếm</button>
+            </div>
+            <p className="search-hint">Tìm kiếm không phân biệt hoa/thường; có thể lọc riêng từng trường.</p>
+            {filtersOpen && (
+              <div className="field-filters" id="catalog-field-filters">
+                {formFields.map(({ key, label }) => (
+                  <div className="filter-field" key={key}>
+                    <label htmlFor={`filter-${key}`}>{label}</label>
+                    <input
+                      id={`filter-${key}`}
+                      type="search"
+                      value={filtersDraft[key]}
+                      onChange={(event) => setFiltersDraft((current) => ({ ...current, [key]: event.target.value }))}
+                    />
+                  </div>
+                ))}
+                <div className="filter-actions">
+                  <button className="button button-quiet" type="button" onClick={handleClearSearch}>Xóa bộ lọc</button>
+                  <button className="button button-primary" type="submit">Áp dụng lọc</button>
+                </div>
+              </div>
+            )}
+          </form>
           <div className="table-scroll" aria-busy={listBusy}>
             <table>
               <caption className="sr-only">Danh sách hồ sơ sản phẩm</caption>
@@ -391,7 +459,7 @@ function App() {
               </tbody>
             </table>
             {!listBusy && recordPage?.items.length === 0 && (
-              <div className="empty-state"><span className="empty-icon" aria-hidden="true">▤</span><h3>Danh mục chưa có dữ liệu</h3><p>Tạo hồ sơ đầu tiên để bắt đầu quản lý danh mục sản phẩm.</p><button className="button button-secondary" type="button" onClick={() => setFormOpen(true)}>Tạo hồ sơ đầu tiên</button></div>
+              <div className="empty-state"><span className="empty-icon" aria-hidden="true">▤</span><h3>{hasActiveSearch ? 'Không tìm thấy hồ sơ phù hợp' : 'Danh mục chưa có dữ liệu'}</h3><p>{hasActiveSearch ? 'Thử thay đổi từ khóa hoặc bộ lọc để tìm hồ sơ.' : 'Tạo hồ sơ đầu tiên để bắt đầu quản lý danh mục sản phẩm.'}</p>{hasActiveSearch ? <button className="button button-secondary" type="button" onClick={handleClearSearch}>Xóa tìm kiếm và bộ lọc</button> : <button className="button button-secondary" type="button" onClick={() => setFormOpen(true)}>Tạo hồ sơ đầu tiên</button>}</div>
             )}
             {listBusy && !recordPage && <p className="loading-state" role="status">Đang tải hồ sơ…</p>}
           </div>
