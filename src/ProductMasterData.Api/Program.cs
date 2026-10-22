@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using System.Threading.RateLimiting;
 using System.Security.Claims;
 using ProductMasterData.Api.Health;
+using ProductMasterData.Api.Catalog;
 using ProductMasterData.Api.Identity;
 using ProductMasterData.Application.Health;
 using ProductMasterData.Infrastructure.Identity;
@@ -93,6 +94,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 app.MapOpenApi();
 app.MapProductHealthEndpoints();
+app.MapProductRecordEndpoints();
 app.MapGet("/api/v1/auth/csrf", (HttpContext httpContext, IAntiforgery antiforgery) =>
 {
     var tokens = antiforgery.GetAndStoreTokens(httpContext);

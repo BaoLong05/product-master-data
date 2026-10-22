@@ -21,4 +21,4 @@ Status: implemented login contract. CSRF defense and login throttling are covere
 
 ## Out of scope
 
-Logout, account-management endpoints, password reset/change, role/permission resolution, and frontend login UI remain out of scope. Deployment remains local-only.
+This earlier authentication slice did not cover account-management endpoints, password reset/change, or role/permission administration. The signed-in product-record UI is now implemented separately. Deployment remains local-only.
