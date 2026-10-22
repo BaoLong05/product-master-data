@@ -9,9 +9,10 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
 {
     private const int MaximumWorksheets = 20;
     private const int MaximumColumns = 100;
+    private const int MaximumPreviewRows = 10;
     private const long MaximumXmlCharactersPerPart = 1_000_000;
 
-    public WorkbookPreview ReadHeaders(ReadOnlyMemory<byte> workbookBytes)
+    public WorkbookPreview ReadPreview(ReadOnlyMemory<byte> workbookBytes, string? worksheetName)
     {
         try
         {
@@ -28,8 +29,9 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
                 throw new InvalidWorkbookException($"The workbook must contain between 1 and {MaximumWorksheets} worksheets.");
             }
 
-            var previews = new List<WorksheetPreview>(sheets.Length);
-            foreach (var sheet in sheets)
+            var selectedSheets = SelectSheets(sheets, worksheetName);
+            var previews = new List<WorksheetPreview>(selectedSheets.Length);
+            foreach (var sheet in selectedSheets)
             {
                 if (string.IsNullOrWhiteSpace(sheet.Name?.Value) || string.IsNullOrWhiteSpace(sheet.Id?.Value))
                 {
@@ -41,15 +43,46 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
                     throw new InvalidWorkbookException("The workbook contains an unsupported worksheet reference.");
                 }
 
-                var (headers, sharedStringReferences) = ReadHeaders(worksheetPart);
-                if (sharedStringReferences.Count > 0)
+                var (headerRow, dataRows) = ReadWorksheetRows(worksheetPart, includeDataRows: worksheetName is not null);
+                var rawRows = new List<RawPreviewRow>();
+                if (headerRow is not null)
+                {
+                    var rowNumber = GetRowNumber(headerRow, 1);
+                    rawRows.Add(ReadCellValues(headerRow, rowNumber));
+                    foreach (var dataRow in dataRows)
+                    {
+                        rawRows.Add(ReadCellValues(dataRow, GetRowNumber(dataRow, checked(rawRows[^1].RowNumber + 1))));
+                    }
+                }
+
+                var sharedStringRows = rawRows.Where(row => row.SharedStringReferences.Count > 0).ToArray();
+                if (sharedStringRows.Length > 0)
                 {
                     var sharedStringPart = workbookPart.SharedStringTablePart
                         ?? throw new InvalidWorkbookException("The workbook is missing its shared string table.");
-                    ReadSharedStringHeaders(sharedStringPart, sharedStringReferences, headers);
+                    ReadSharedStringValues(sharedStringPart, sharedStringRows);
                 }
 
-                previews.Add(new WorksheetPreview(sheet.Name.Value, headers));
+                var columnCount = rawRows.Count == 0 ? 0 : rawRows.Max(row => row.Values.Length);
+                for (var index = 0; index < rawRows.Count; index++)
+                {
+                    var row = rawRows[index];
+                    if (row.Values.Length < columnCount)
+                    {
+                        rawRows[index] = row with
+                        {
+                            Values = row.Values.Concat(new string?[columnCount - row.Values.Length]).ToArray()
+                        };
+                    }
+                }
+
+                var headers = rawRows.FirstOrDefault()?.Values ?? [];
+                var previewRows = worksheetName is null
+                    ? null
+                    : rawRows.Skip(1)
+                        .Select(row => new WorkbookPreviewRow(row.RowNumber, row.Values, row.FormulaColumns))
+                        .ToArray();
+                previews.Add(new WorksheetPreview(sheet.Name.Value, headers, previewRows));
             }
 
             return new WorkbookPreview(previews);
@@ -60,35 +93,73 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
         }
     }
 
-    private static (string?[] Headers, List<(int SharedStringIndex, int ColumnIndex)> SharedStringReferences) ReadHeaders(WorksheetPart worksheetPart)
+    private static Sheet[] SelectSheets(IReadOnlyList<Sheet> sheets, string? worksheetName)
+    {
+        if (worksheetName is null)
+        {
+            return sheets.ToArray();
+        }
+
+        var matchingSheets = sheets.Where(sheet => string.Equals(sheet.Name?.Value, worksheetName, StringComparison.Ordinal)).ToArray();
+        return matchingSheets.Length == 1
+            ? matchingSheets
+            : throw new InvalidWorkbookException("The workbook does not contain exactly one worksheet with that name.");
+    }
+
+    private static (Row? Header, IReadOnlyList<Row> DataRows) ReadWorksheetRows(WorksheetPart worksheetPart, bool includeDataRows)
     {
         using var reader = OpenXmlReader.Create(worksheetPart);
-        Row? headerRow = null;
+        Row? header = null;
+        var dataRows = new List<Row>(includeDataRows ? MaximumPreviewRows : 0);
         while (reader.Read())
         {
-            if (reader.ElementType == typeof(Row))
+            if (reader.ElementType != typeof(Row))
             {
-                headerRow = reader.LoadCurrentElement() as Row
-                    ?? throw new InvalidWorkbookException("The workbook contains an invalid header row.");
+                continue;
+            }
+
+            var row = reader.LoadCurrentElement() as Row
+                ?? throw new InvalidWorkbookException("The workbook contains an invalid worksheet row.");
+            if (header is null)
+            {
+                header = row;
+                if (!includeDataRows)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            dataRows.Add(row);
+            if (dataRows.Count == MaximumPreviewRows)
+            {
                 break;
             }
         }
 
-        var cells = headerRow?.Elements<Cell>().ToArray() ?? [];
+        return (header, dataRows);
+    }
+
+    private static RawPreviewRow ReadCellValues(Row row, int rowNumber)
+    {
+        var cells = row.Elements<Cell>().ToArray();
         var columnCount = cells.Length == 0 ? 0 : cells.Max(cell => GetColumnIndex(cell.CellReference?.Value));
-        var headers = new string?[columnCount];
+        var values = new string?[columnCount];
+        var formulaColumns = new List<int>();
         var sharedStringReferences = new List<(int SharedStringIndex, int ColumnIndex)>();
         foreach (var cell in cells)
         {
-            var columnIndex = GetColumnIndex(cell.CellReference?.Value);
+            var columnIndex = GetColumnIndex(cell.CellReference?.Value) - 1;
             if (cell.CellFormula is not null)
             {
+                formulaColumns.Add(columnIndex + 1);
                 continue;
             }
 
             if (cell.DataType?.Value == CellValues.InlineString)
             {
-                headers[columnIndex - 1] = cell.InlineString?.InnerText;
+                values[columnIndex] = cell.InlineString?.InnerText;
             }
             else if (cell.DataType?.Value == CellValues.SharedString)
             {
@@ -97,25 +168,32 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
                     throw new InvalidWorkbookException("The workbook contains an invalid shared string reference.");
                 }
 
-                sharedStringReferences.Add((sharedStringIndex, columnIndex - 1));
+                sharedStringReferences.Add((sharedStringIndex, columnIndex));
             }
             else
             {
-                headers[columnIndex - 1] = cell.CellValue?.Text;
+                values[columnIndex] = cell.CellValue?.Text;
             }
         }
 
-        return (headers, sharedStringReferences);
+        return new RawPreviewRow(rowNumber, values, formulaColumns, sharedStringReferences);
     }
 
-    private static void ReadSharedStringHeaders(
-        SharedStringTablePart sharedStringPart,
-        IReadOnlyList<(int SharedStringIndex, int ColumnIndex)> references,
-        string?[] headers)
+    private static int GetRowNumber(Row row, int fallbackRowNumber)
     {
+        var rowIndex = row.RowIndex?.Value;
+        return rowIndex is null ? fallbackRowNumber : checked((int)rowIndex.Value);
+    }
+
+    private static void ReadSharedStringValues(
+        SharedStringTablePart sharedStringPart,
+        IReadOnlyList<RawPreviewRow> rows)
+    {
+        var references = rows.SelectMany(row => row.SharedStringReferences.Select(reference =>
+            (reference.SharedStringIndex, Row: row, reference.ColumnIndex)));
         var remaining = references
             .GroupBy(reference => reference.SharedStringIndex)
-            .ToDictionary(group => group.Key, group => group.Select(reference => reference.ColumnIndex).ToArray());
+            .ToDictionary(group => group.Key, group => group.Select(reference => (reference.Row, reference.ColumnIndex)).ToArray());
         using var reader = OpenXmlReader.Create(sharedStringPart);
         var index = -1;
         while (reader.Read() && remaining.Count > 0)
@@ -128,11 +206,11 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
             index++;
             var item = reader.LoadCurrentElement() as SharedStringItem
                 ?? throw new InvalidWorkbookException("The workbook contains an invalid shared string item.");
-            if (remaining.Remove(index, out var columnIndexes))
+            if (remaining.Remove(index, out var targets))
             {
-                foreach (var columnIndex in columnIndexes)
+                foreach (var (row, columnIndex) in targets)
                 {
-                    headers[columnIndex] = item.InnerText;
+                    row.Values[columnIndex] = item.InnerText;
                 }
             }
         }
@@ -143,11 +221,17 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
         }
     }
 
+    private sealed record RawPreviewRow(
+        int RowNumber,
+        string?[] Values,
+        IReadOnlyList<int> FormulaColumns,
+        IReadOnlyList<(int SharedStringIndex, int ColumnIndex)> SharedStringReferences);
+
     private static int GetColumnIndex(string? cellReference)
     {
         if (string.IsNullOrWhiteSpace(cellReference))
         {
-            throw new InvalidWorkbookException("The workbook contains a header cell without a column reference.");
+            throw new InvalidWorkbookException("The workbook contains a cell without a column reference.");
         }
 
         var index = 0;

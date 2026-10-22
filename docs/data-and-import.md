@@ -1,6 +1,6 @@
 # Data and Excel import
 
-Status: initial record schema implemented. The first migration preserves all 27 source values as nullable text; typed parsing/derived columns remain pending confirmed date/time, decimal, vocabulary, and normalization rules. A protected, stateless `.xlsx` worksheet/header inspection preview is implemented; row validation, mapping, and import/commit remain pending.
+Status: initial record schema implemented. The first migration preserves all 27 source values as nullable text; typed parsing/derived columns remain pending confirmed date/time, decimal, vocabulary, and normalization rules. A protected, stateless `.xlsx` preview supports worksheet/header inspection and up to 10 raw rows from a selected sheet; row validation, mapping, and import/commit remain pending.
 
 ## Observed workbook
 
@@ -64,13 +64,13 @@ See `database-schema.md` for the initial storage design and planned identity/imp
 
 Imported links are never fetched server-side: avoids SSRF and unexpected external data transfer. Render spreadsheet text as text (not HTML); allow only safe clickable URL schemes in the client.
 
-## Implemented structural-preview slice
+## Implemented read-only workbook preview
 
-- `POST /api/v1/imports/preview` accepts one multipart `file`, requires authentication, `imports.preview`, and a valid antiforgery token.
-- Only `.xlsx` is accepted; the uploaded file is capped at 10 MiB. Workbooks are opened read-only with the Open XML SDK. Preview is bounded to 20 worksheets, 100 columns in the first header row, and 1,000,000 XML characters per part. Worksheet rows and shared strings are read sequentially only as far as needed for headers.
-- The response contains each worksheet name and its first-row header text. Formula cells are not evaluated; formula-derived header values are omitted. External links are not fetched.
-- The upload is not retained. This endpoint does not create an import batch, product record, or audit event. The React screen displays worksheet/header text as text and clearly states that no records are imported.
-- This is structural inspection only: it does not map columns, preview product rows, validate cell values/dates/URLs/duplicates, or allow commit. Server-side processing is synchronously bounded by upload and XML-part limits; import-wide time/resource limits and streaming row validation remain outstanding.
+- `POST /api/v1/imports/preview` accepts one multipart `file` and an optional `worksheetName`; it requires authentication, `imports.preview`, and a valid antiforgery token.
+- Only `.xlsx` is accepted; the uploaded file is capped at 10 MiB. Workbooks are opened read-only with the Open XML SDK. Preview is bounded to 20 worksheets, 100 columns, 10 following rows for a selected worksheet, and 1,000,000 XML characters per part. Worksheet rows and shared strings are streamed only as far as the headers and bounded sample require.
+- Without `worksheetName`, the response contains all worksheet names and first-row headers. With an exact sheet name, it returns only that sheet, the same headers, and up to 10 raw following rows with Excel row numbers. Cell values remain text; formula cells and cached results are omitted and their 1-based column positions are marked. Formulas, external links, and URLs are never evaluated or fetched.
+- The upload is not retained. This endpoint does not create an import batch, product record, or audit event. The React screen lets the user select a worksheet and displays its headers and a horizontally scrollable raw sample as text; formula cells are labeled as hidden.
+- This preview does not map columns or validate cell values, dates, URLs, or duplicates, and does not allow commit. The bounded sample is not a validation result. Server-side parsing is synchronous and has file/XML/row bounds but no hard wall-clock guarantee; import-wide processing/time limits and streaming row validation remain outstanding.
 - Uploads beyond the multipart/request limits may be rejected by ASP.NET Core with HTTP 413 before the endpoint returns its structured 400 errors.
 
 ## Date and value handling

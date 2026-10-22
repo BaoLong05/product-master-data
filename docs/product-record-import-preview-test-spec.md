@@ -14,7 +14,7 @@ Status: implemented as a stateless structural inspection slice; no import batch 
 
 - This slice is stateless: the upload is processed in-memory/request buffering only, not retained.
 - It only inspects worksheet names and first-row headers (at most 20 worksheets and 100 columns per worksheet); it does not create records or batches.
-- `.xls`, `.xlsm`, CSV, formula evaluation, URL fetching, custom mappings, row preview/validation, duplicate resolution, commit, error downloads, and import history are out of scope.
+- `.xls`, `.xlsm`, CSV, formula evaluation, URL fetching, custom mappings, row validation, duplicate resolution, commit, error downloads, and import history are out of scope. The separate row-preview slice adds a bounded raw sample only; it is not validation or import.
 - The parser must use the maintained Open XML SDK, read-only mode, a bounded XML-part size, and must not evaluate formulas or external links.
 
 ## Focused executable cases

@@ -24,11 +24,21 @@
 .import-preview-card { margin-bottom: 22px; }
 .import-preview-form { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .import-preview-form input { max-width: 100%; color: #53686e; font-size: 12px; }
+.import-sheet-controls { margin-top: 18px; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.import-sheet-select { min-width: min(100%, 260px); display: grid; gap: 6px; color: #53686e; font-size: 11px; font-weight: 700; }
+.import-sheet-select select { width: 100%; min-height: 40px; padding: 8px 10px; color: #263d43; border: 1px solid #dce5e7; border-radius: 8px; background: #fff; font-size: 12px; }
 .import-worksheets { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
 .import-worksheet { min-width: 0; padding: 14px; border: 1px solid #e5ecee; border-radius: 10px; background: #fbfcfc; }
 .import-worksheet h3 { margin: 0 0 10px; color: #29434a; font-size: 13px; }
 .import-worksheet ol { max-height: 240px; margin: 0; padding-left: 24px; overflow: auto; color: #607177; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
 .import-worksheet p { margin: 0; color: #809096; font-size: 11px; }
+.import-row-preview { margin-top: 20px; min-width: 0; }
+.import-row-preview h3 { margin: 0 0 10px; color: #29434a; font-size: 13px; }
+.import-row-table-scroll { width: 100%; min-width: 0; overflow-x: auto; border: 1px solid #e5ecee; border-radius: 9px; }
+.import-row-table { min-width: 760px; }
+.import-row-table th { white-space: nowrap; }
+.import-row-table td { max-width: 260px; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; }
+.import-preview-note { margin: 9px 0 0; color: #809096; font-size: 10px; }
 .catalog-card { overflow: hidden; }
 .catalog-toolbar { min-height: 76px; padding: 17px 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #edf1f2; }
 .catalog-toolbar h2, .section-heading h2 { margin: 0; color: #213940; font: 700 16px Inter, ui-sans-serif, sans-serif; letter-spacing: -.02em; }

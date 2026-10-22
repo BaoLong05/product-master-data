@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -168,6 +169,62 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
+    public async Task Selected_sheet_returns_only_ten_raw_rows_and_omits_formula_values()
+    {
+        const string userName = "import.preview.rows.test";
+        const string password = "A-strong-import-preview-rows-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        using var workbook = new ByteArrayContent(CreateWorkbookWithFormulaRow());
+        content.Add(workbook, "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+
+        using var response = await client.PostAsync("/api/v1/imports/preview", content);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        var preview = JsonSerializer.Deserialize<ImportPreviewResponse>(responseBody, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sheet = Assert.Single(preview!.Worksheets);
+        Assert.Equal("DATA", sheet.Name);
+        Assert.Equal(["M.CODE", "Item Name"], sheet.Headers);
+        Assert.Equal(10, sheet.Rows!.Count);
+        Assert.Equal(Enumerable.Range(2, 10), sheet.Rows.Select(row => row.RowNumber));
+        Assert.Equal("1", sheet.Rows[0].Values[0]);
+        Assert.Null(sheet.Rows[0].Values[1]);
+        Assert.Equal([2], sheet.Rows[0].FormulaColumns);
+        Assert.DoesNotContain("HYPERLINK", responseBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cached-secret", responseBody, StringComparison.OrdinalIgnoreCase);
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal(0, await database.ProductRecords.CountAsync());
+        Assert.Equal(0, await database.AuditEvents.CountAsync());
+    }
+
+    [Fact]
+    public async Task Unknown_selected_sheet_returns_a_safe_client_error()
+    {
+        const string userName = "import.preview.unknown-sheet.test";
+        const string password = "A-strong-import-preview-unknown-sheet-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        using var workbook = new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 0), ("ARCHIVE", ["M.CODE"], 0)));
+        content.Add(workbook, "file", "products.xlsx");
+        content.Add(new StringContent("MISSING"), "worksheetName");
+
+        using var response = await client.PostAsync("/api/v1/imports/preview", content);
+        var error = await response.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_workbook", error?.Code);
+    }
+
+    [Fact]
     public async Task Import_operator_can_inspect_workbook_headers_without_writing_business_data()
     {
         const string userName = "import.preview.test";
@@ -193,11 +250,13 @@ public sealed class ImportPreviewEndpointTests
             {
                 Assert.Equal("DATA", sheet.Name);
                 Assert.Equal(["M.CODE", "Item Name"], sheet.Headers);
+                Assert.Null(sheet.Rows);
             },
             sheet =>
             {
                 Assert.Equal("Other", sheet.Name);
                 Assert.Equal(["Date", "Note"], sheet.Headers);
+                Assert.Null(sheet.Rows);
             });
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
@@ -206,12 +265,23 @@ public sealed class ImportPreviewEndpointTests
     }
 
     private sealed record ImportPreviewResponse(IReadOnlyList<WorksheetPreview> Worksheets);
-    private sealed record WorksheetPreview(string Name, IReadOnlyList<string?> Headers);
+    private sealed record WorksheetPreview(string Name, IReadOnlyList<string?> Headers, IReadOnlyList<ImportPreviewRow>? Rows);
+    private sealed record ImportPreviewRow(int RowNumber, IReadOnlyList<string?> Values, IReadOnlyList<int> FormulaColumns);
     private sealed record ImportPreviewErrorResponse(string Code, string Message);
     private sealed record CsrfTokenResponse(string? RequestToken);
     private sealed record LoginRequest(string UserName, string Password);
 
+    private static byte[] CreateWorkbookWithFormulaRow()
+        => CreateWorkbook(
+            [("DATA", ["M.CODE", "Item Name"], 45_000), ("ARCHIVE", ["Legacy"], 0)],
+            includeFormulaInFirstSheet: true);
+
     private static byte[] CreateWorkbook(params (string Name, string[] Headers, int TrailingRows)[] sheets)
+        => CreateWorkbook(sheets, includeFormulaInFirstSheet: false);
+
+    private static byte[] CreateWorkbook(
+        (string Name, string[] Headers, int TrailingRows)[] sheets,
+        bool includeFormulaInFirstSheet)
     {
         using var stream = new MemoryStream();
         var sharedStringValues = sheets.SelectMany(sheet => sheet.Headers).ToArray();
@@ -261,7 +331,9 @@ public sealed class ImportPreviewEndpointTests
                 var cells = string.Join("", sheets[index].Headers.Select((header, column) =>
                     $"<c r=\"{(char)('A' + column)}1\" t=\"s\"><v>{Array.IndexOf(sharedStringValues, header)}</v></c>"));
                 var trailingRows = string.Concat(Enumerable.Range(2, sheets[index].TrailingRows).Select(row =>
-                    $"<row r=\"{row}\"><c r=\"A{row}\"><v>1</v></c></row>"));
+                    index == 0 && includeFormulaInFirstSheet && row == 2
+                        ? "<row r=\"2\"><c r=\"A2\"><v>1</v></c><c r=\"B2\"><f>HYPERLINK(&quot;https://example.invalid&quot;,&quot;formula-secret&quot;)</f><v>cached-secret</v></c></row>"
+                        : $"<row r=\"{row}\"><c r=\"A{row}\"><v>1</v></c></row>"));
                 WriteEntry(archive, $"xl/worksheets/sheet{index + 1}.xml", $"""
                     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                     <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">{cells}</row>{trailingRows}</sheetData></worksheet>
