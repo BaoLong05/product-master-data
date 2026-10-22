@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { buildCatalogQuery } from './catalog-search'
+import { ImportHeaderDiagnostics } from './import-header-diagnostics'
 import { createImportPreviewRequest } from './import-preview'
 import './App.css'
 
@@ -490,9 +491,7 @@ function App() {
                 {importPreview.worksheets.filter((sheet) => sheet.name === selectedWorksheetName).map((sheet) => (
                   <section className="import-worksheet" key={sheet.name}>
                     <h3>{sheet.name}</h3>
-                    {sheet.headers.length ? (
-                      <ol>{sheet.headers.map((header, index) => <li key={`${sheet.name}-${index}`}>{header || `Cột ${index + 1} (trống)`}</li>)}</ol>
-                    ) : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
+                    {sheet.headers.length ? <ImportHeaderDiagnostics headers={sheet.headers} /> : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
                   </section>
                 ))}
               </div>

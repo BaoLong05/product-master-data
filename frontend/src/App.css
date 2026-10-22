@@ -31,6 +31,15 @@
 .import-worksheet { min-width: 0; padding: 14px; border: 1px solid #e5ecee; border-radius: 10px; background: #fbfcfc; }
 .import-worksheet h3 { margin: 0 0 10px; color: #29434a; font-size: 13px; }
 .import-worksheet ol { max-height: 240px; margin: 0; padding-left: 24px; overflow: auto; color: #607177; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.import-header-diagnostics { min-width: 0; margin-top: 12px; }
+.import-header-diagnostics > p:not(.import-preview-note) { margin: 8px 0; color: #718187; font-size: 11px; line-height: 1.5; }
+.import-header-list li { padding: 5px 0; border-bottom: 1px solid #edf1f2; }
+.import-header-name { display: block; color: #40575e; overflow-wrap: anywhere; }
+.import-header-statuses { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.import-header-statuses span { padding: 2px 6px; border-radius: 999px; color: #5c6f74; background: #edf3f3; font-size: 9px; font-weight: 700; }
+.import-missing-headers { margin-top: 10px; color: #607177; font-size: 10px; }
+.import-missing-headers summary { cursor: pointer; font-weight: 700; }
+.import-missing-headers ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.7; overflow-wrap: anywhere; }
 .import-worksheet p { margin: 0; color: #809096; font-size: 11px; }
 .import-row-preview { margin-top: 20px; min-width: 0; }
 .import-row-preview h3 { margin: 0 0 10px; color: #29434a; font-size: 13px; }
