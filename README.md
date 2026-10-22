@@ -31,7 +31,7 @@ bun run db:migrate
 dotnet run --project src/ProductMasterData.Api
 ```
 
-The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. `bun run db:migrate` applies the product catalog and local identity/permission schemas. First-admin bootstrap, local cookie login/logout, CSRF tokens, login throttling, and server-side session revocation are implemented; CRUD, account management, and permission enforcement remain pending.
+The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. `bun run db:migrate` applies the product catalog and local identity/permission schemas. First-admin bootstrap, local cookie login/logout, CSRF tokens, login throttling, server-side session revocation, and catalogued permission-policy infrastructure are implemented. No product-data endpoint yet applies a permission policy; CRUD and account management remain pending.
 
 ## Root commands
 
@@ -45,4 +45,4 @@ Stopping Compose does not delete the named database volume. To permanently delet
 
 ## First administrator and production status
 
-The API supports explicit first-admin bootstrap, local login with CSRF validation and login throttling, and local cookie logout with server-side security-stamp revocation. Every authenticated request checks current account activity and stamp against persistence. It does not yet provide account management, permission enforcement, or CRUD APIs. Migrations create catalog and identity/permission tables, but no user, role, or product data is seeded. Do not expose this scaffold to a network or treat it as production-ready. Logout revokes all sessions for that user; per-device session management is not provided.
+The API supports explicit first-admin bootstrap, local login with CSRF validation and login throttling, and local cookie logout with server-side security-stamp revocation. Every authenticated request checks current account activity and stamp against persistence. Catalogued permission policies check current persisted role grants, but no product-data endpoint is protected by one yet. Account-management and CRUD APIs remain unimplemented. Migrations create catalog and identity/permission tables, but no user, role, or product data is seeded. Do not expose this scaffold to a network or treat it as production-ready. Logout revokes all sessions for that user; per-device session management is not provided.
