@@ -4,19 +4,19 @@ This is an implementation sequence, not a claim that features exist. Deliver one
 
 ## Phase 0 — documentation and bootstrap (complete)
 
-Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript scaffold are in place. The product-record schema is implemented; CRUD behavior is not.
+Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript client are in place. The product-record schema and first list/detail/create workflow are implemented; update/delete, search/filter, import, and audit remain open.
 
 ## Phase 1 — API foundation (in progress)
 
-The operational API foundation provides liveness/readiness health endpoints, a PostgreSQL readiness probe, consistent Problem Details for unmatched routes, a generated OpenAPI document, and API integration tests. The first PostgreSQL catalog schema and EF Core migration now store all 27 source values as nullable text, with partial unique M.CODE and active-list indexes. Remaining foundation work includes structured logging and database-backed integration-test setup. The first product-data API must follow authentication/authorization enforcement.
+The operational API foundation provides liveness/readiness health endpoints, a PostgreSQL readiness probe, consistent Problem Details for unmatched routes, a generated OpenAPI document, and API integration tests. The first PostgreSQL catalog schema and EF Core migration now store all 27 source values as nullable text, with partial unique M.CODE and active-list indexes. The first product-data APIs apply authentication and persisted-permission enforcement. Remaining foundation work includes structured logging and database-backed integration-test setup.
 
 ## Phase 2 — identity and permissions
 
-Persisted local identity/role/permission schema and the permission catalog, safe first-admin bootstrap, cookie login/logout, CSRF token validation, per-IP login throttling, and per-request active-user/security-stamp validation are implemented. Catalogued permission policies now have a server handler that checks current persisted role grants, but no product-data endpoint uses these policies yet. Logout rotates the user's stamp to revoke copied cookies for all sessions; per-device session management remains unsupported. Remaining: user and role management, checkbox UI, applying permission policies to every data endpoint, audit trail, PostgreSQL-backed permission integration tests, and permission-matrix tests. Do not ship broad CRUD before every endpoint's authorization behavior is enforceable and verified.
+Persisted local identity/role/permission schema and the permission catalog, safe first-admin bootstrap, cookie login/logout, CSRF token validation, per-IP login throttling, and per-request active-user/security-stamp validation are implemented. Product record list/detail routes require `records.read`; create requires `records.create` and antiforgery validation. Logout rotates the user's stamp to revoke copied cookies for all sessions; per-device session management remains unsupported. Remaining: user and role management, checkbox UI, update/delete authorization, audit trail, PostgreSQL-backed permission integration tests, and permission-matrix tests. Do not expose the create workflow beyond local development before audit coverage is added.
 
 ## Phase 3 — record management
 
-Confirm field constraints and unique key; migrations, record list/detail/create/update/soft-delete, filtering/pagination, CRUD permission tests, audit, and UI.
+First slice delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, and signed-in React list/create UI. Remaining: update/soft-delete, search/filter, PostgreSQL-backed record API/concurrency tests, append-only audit events, and broader UI permission affordances. The current create workflow is not production-ready until audit coverage is added.
 
 ## Phase 4 — safe Excel import
 
