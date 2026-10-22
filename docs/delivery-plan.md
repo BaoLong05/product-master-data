@@ -20,7 +20,7 @@ Delivered: paged active-record list, detail, create with optional text fields an
 
 ## Phase 4 — safe Excel import (in progress)
 
-Delivered: authenticated `imports.preview`-protected `.xlsx` upload with antiforgery validation, a 10 MiB limit, read-only Open XML worksheet/header inspection, and selected-sheet preview of at most 10 raw rows in React. Both requests are stateless and perform no business writes or file retention. Remaining: source-header mapping, row validation, formula/date/link/duplicate error reporting, idempotent transactional commit, import history/audit, and testing with the supplied workbook. A synthetic 45,000-row worksheet verifies bounded sampling; the original sample workbook is not present in the repository and has not been exercised.
+Delivered: authenticated `imports.preview`-protected `.xlsx` upload with antiforgery validation, a 10 MiB limit, read-only Open XML worksheet/header inspection, selected-sheet preview of at most 10 raw rows, and client-side diagnostics for exact recognized, duplicate, missing, blank, and unfamiliar source headers. Both requests are stateless and perform no business writes or file retention; header recognition does not auto-map columns or block preview. Remaining: explicit user-selected source-header mapping, row validation, formula/date/link/duplicate error reporting, idempotent transactional commit, import history/audit, and testing with the supplied workbook. A synthetic 45,000-row worksheet verifies bounded sampling; the original sample workbook is not present in the repository and has not been exercised.
 
 ## Phase 5 — operations hardening
 
