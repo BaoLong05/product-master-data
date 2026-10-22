@@ -16,7 +16,7 @@ Persisted local identity/role/permission schema and the permission catalog, safe
 
 ## Phase 3 — record management
 
-Delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, and signed-in React list/create UI. Record creation writes an append-only audit event. Record update is now available through a permission-protected API and the React edit form; updates require the current version, increment it, and write safe audit metadata atomically. Remaining: soft-delete, search/filter, PostgreSQL-backed concurrent API tests for record creation/update, audit-history UI, and broader UI permission affordances. Audit for operations beyond create/update is not implemented.
+Delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, and signed-in React list/create UI. Record create/update/soft-delete write append-only audit events. Update and soft-delete require current versions and increment them to prevent stale overwrites; the React catalog supports edit and confirmed soft-delete. Remaining: restore/permanent-erasure policy, search/filter, PostgreSQL-backed concurrent API tests for record mutations, audit-history UI, and broader UI permission affordances. Import/export and identity-change audit are not implemented.
 
 ## Phase 4 — safe Excel import
 
