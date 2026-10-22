@@ -9,7 +9,7 @@ Status: implemented as a read-only extension of the existing workbook preview. N
 - With an exact `worksheetName`, return only that worksheet, its first-row headers, and up to the next 10 worksheet rows with Excel row numbers. Values remain raw text; do not infer dates/numbers or evaluate formulas/cached results/links.
 - Pad values and headers to the same width. Formula cells have null values and are identified by 1-based column positions; neither formula text nor cached values are exposed.
 - Unknown sheet names return a safe HTTP 400 error. The selected preview remains stateless and performs no business/audit writes.
-- The React screen lets users select a sheet, inspect its headers and client-side exact-source-header diagnostics, and separately request/display up to 10 raw rows. Text is rendered as text; diagnostics do not map columns, and the sample is not validation or import.
+- The React screen lets users select a sheet, inspect its headers and client-side exact-source-header diagnostics, and separately request/display up to 10 raw rows. Text is rendered as text; diagnostics do not auto-map columns. A separate mapping component may project the bounded sample using explicit user choices, but neither view validates or imports data.
 
 ## Focused executable cases
 

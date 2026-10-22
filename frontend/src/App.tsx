@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { buildCatalogQuery } from './catalog-search'
+import { ImportColumnMapping as ImportColumnMappingView } from './import-column-mapping-view'
+import { updateImportColumnMapping, type ImportColumnMapping, type ImportPreviewRow } from './import-column-mapping'
 import { ImportHeaderDiagnostics } from './import-header-diagnostics'
 import { createImportPreviewRequest } from './import-preview'
 import './App.css'
@@ -50,7 +52,6 @@ type ProductRecordPage = {
   totalCount: number
 }
 type ProductRecordDetail = ProductRecordForm & { id: string; version: number }
-type ImportPreviewRow = { rowNumber: number; values: (string | null)[]; formulaColumns: number[] }
 type ImportWorksheet = { name: string; headers: (string | null)[]; rows?: ImportPreviewRow[] }
 type ImportPreview = { worksheets: ImportWorksheet[] }
 
@@ -138,6 +139,7 @@ function App() {
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   const [selectedWorksheetName, setSelectedWorksheetName] = useState('')
   const [rowPreview, setRowPreview] = useState<ImportWorksheet | null>(null)
+  const [importColumnMapping, setImportColumnMapping] = useState<ImportColumnMapping>({})
   const [importError, setImportError] = useState('')
   const [importBusy, setImportBusy] = useState(false)
 
@@ -236,6 +238,7 @@ function App() {
     setImportPreview(null)
     setSelectedWorksheetName('')
     setRowPreview(null)
+    setImportColumnMapping({})
     await requestImportPreview()
   }
 
@@ -461,7 +464,7 @@ function App() {
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               disabled={importBusy}
-              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setSelectedWorksheetName(''); setRowPreview(null); setImportError('') }}
+              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setSelectedWorksheetName(''); setRowPreview(null); setImportColumnMapping({}); setImportError('') }}
             />
             <button className="button button-secondary" type="submit" disabled={importBusy || !importFile}>
               {importBusy ? 'Đang kiểm tra…' : 'Xem sheet và tiêu đề'}
@@ -477,7 +480,7 @@ function App() {
                       id="import-worksheet"
                       value={selectedWorksheetName}
                       disabled={importBusy}
-                      onChange={(event) => { setSelectedWorksheetName(event.target.value); setRowPreview(null); setImportError('') }}
+                      onChange={(event) => { setSelectedWorksheetName(event.target.value); setRowPreview(null); setImportColumnMapping({}); setImportError('') }}
                     >
                       {importPreview.worksheets.map((sheet) => <option key={sheet.name} value={sheet.name}>{sheet.name}</option>)}
                     </select>
@@ -487,11 +490,22 @@ function App() {
                   </button>
                 </div>
               )}
-              <div className="import-worksheets" aria-live="polite">
+              <div className="import-worksheets">
                 {importPreview.worksheets.filter((sheet) => sheet.name === selectedWorksheetName).map((sheet) => (
                   <section className="import-worksheet" key={sheet.name}>
                     <h3>{sheet.name}</h3>
-                    {sheet.headers.length ? <ImportHeaderDiagnostics headers={sheet.headers} /> : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
+                    {sheet.headers.length ? (
+                      <>
+                        <ImportHeaderDiagnostics headers={sheet.headers} />
+                        <ImportColumnMappingView
+                          headers={sheet.headers}
+                          fields={formFields}
+                          mapping={importColumnMapping}
+                          rows={rowPreview?.name === sheet.name ? rowPreview.rows : undefined}
+                          onChange={(columnNumber, targetKey) => setImportColumnMapping((current) => updateImportColumnMapping(current, columnNumber, targetKey, formFields))}
+                        />
+                      </>
+                    ) : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
                   </section>
                 ))}
               </div>

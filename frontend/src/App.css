@@ -41,6 +41,21 @@
 .import-missing-headers summary { cursor: pointer; font-weight: 700; }
 .import-missing-headers ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.7; overflow-wrap: anywhere; }
 .import-worksheet p { margin: 0; color: #809096; font-size: 11px; }
+.import-column-mapping { min-width: 0; margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5ecee; }
+.import-column-mapping h3 { margin: 0 0 9px; color: #29434a; font-size: 13px; }
+.import-column-mapping > p { margin: 8px 0; color: #718187; font-size: 11px; line-height: 1.5; }
+.import-column-mapping .import-mapping-status { color: #08766f; font-weight: 700; }
+.import-mapping-grid { max-height: 420px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; overflow: auto; padding: 2px 4px 2px 0; }
+.import-mapping-field { min-width: 0; display: grid; align-content: start; gap: 5px; }
+.import-mapping-field label { color: #53686e; font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+.import-mapping-field select { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; color: #263d43; border: 1px solid #dce5e7; border-radius: 8px; background: #fff; font-size: 12px; }
+.import-mapping-field select:focus { border-color: #51a59e; outline: 3px solid rgba(8, 133, 124, .1); }
+.import-mapped-preview { margin-top: 16px; min-width: 0; }
+.import-mapped-preview h4 { margin: 0 0 9px; color: #29434a; font-size: 12px; }
+.import-mapped-preview-scroll { width: 100%; min-width: 0; overflow-x: auto; border: 1px solid #e5ecee; border-radius: 9px; }
+.import-mapped-table { min-width: 520px; }
+.import-mapped-table th { white-space: nowrap; }
+.import-mapped-table td { max-width: 260px; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; }
 .import-row-preview { margin-top: 20px; min-width: 0; }
 .import-row-preview h3 { margin: 0 0 10px; color: #29434a; font-size: 13px; }
 .import-row-table-scroll { width: 100%; min-width: 0; overflow-x: auto; border: 1px solid #e5ecee; border-radius: 9px; }

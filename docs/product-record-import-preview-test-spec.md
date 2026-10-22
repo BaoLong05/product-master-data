@@ -8,13 +8,13 @@ Status: implemented as a stateless structural inspection slice; no import batch 
 - A supported workbook returns worksheet names and a bounded list of the first-row header values for each worksheet. Values are read as text; formulas are never evaluated or fetched. No business records, import history, or audit events are written.
 - Upload size is capped at 10 MiB. Wrong extensions, missing/empty files, and malformed workbooks receive structured HTTP 400 errors; ASP.NET Core may reject requests that exceed multipart/request limits with HTTP 413 before the endpoint runs.
 - Anonymous requests receive 401; authenticated users without `imports.preview` receive 403. Missing/invalid CSRF tokens do not process the upload.
-- The UI lets a signed-in operator choose an `.xlsx`, inspect sheet/header output, view exact source-header diagnostics, and safely reports errors. Header recognition is not mapping; the UI does not imply row validation or import/commit is available.
+- The UI lets a signed-in operator choose an `.xlsx`, inspect sheet/header output, view exact source-header diagnostics, and safely report errors. Header recognition itself is not mapping. The separate client-side mapping step is specified in `product-record-import-column-mapping-test-spec.md`; neither step implies row validation or import/commit is available.
 
 ## Scope and limits
 
 - This slice is stateless: the upload is processed in-memory/request buffering only, not retained.
 - It only inspects worksheet names and first-row headers (at most 20 worksheets and 100 columns per worksheet); it does not create records or batches.
-- `.xls`, `.xlsm`, CSV, formula evaluation, URL fetching, custom mappings, row validation, duplicate resolution, commit, error downloads, and import history are out of scope. The separate row-preview slice adds a bounded raw sample only; it is not validation or import.
+- `.xls`, `.xlsm`, CSV, formula evaluation, URL fetching, mapping interpretation by this endpoint, row validation, duplicate resolution, commit, error downloads, and import history are out of scope. The separate row-preview slice adds a bounded raw sample only; the separate mapping UI can project that sample but is not validation or import.
 - The parser must use the maintained Open XML SDK, read-only mode, a bounded XML-part size, and must not evaluate formulas or external links.
 
 ## Focused executable cases
