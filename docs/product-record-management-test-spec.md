@@ -1,6 +1,6 @@
 # Product record entry and browse test specification
 
-Status: implemented as the first local-only vertical slice. Record-creation audit and its PostgreSQL persistence rules are covered by `docs/product-record-audit-test-spec.md`; audit for later mutations remains open.
+Status: list/create and audited record editing are implemented as local-only vertical slices. Audit persistence rules are covered by `docs/product-record-audit-test-spec.md` and the update contract by `docs/product-record-edit-test-spec.md`; other mutations remain open.
 
 ## User workflow
 
@@ -11,6 +11,7 @@ An administrator signs in, views active product records, and creates a record wh
 - `GET /api/v1/records` requires `records.read`, returns only non-deleted rows, ordered by `UpdatedAt` descending then `Id` ascending. `page` defaults to 1, `pageSize` defaults to 50 and must be 1–100. Response includes items, page, pageSize, and totalCount.
 - `GET /api/v1/records/{id}` requires `records.read`; deleted or unknown records return 404.
 - `POST /api/v1/records` requires `records.create` and a valid antiforgery token. It accepts all 27 source fields as nullable text, returns 201 and a resolvable Location.
+- `PUT /api/v1/records/{id}` requires `records.update` and a valid antiforgery token. It replaces all source fields and requires the current `version`; stale versions return 409. Successful updates increment the version and append a `records.updated` audit event atomically.
 - No source field is required. Null and empty `M.CODE` values are allowed. Non-empty `M.CODE` is preserved exactly and must be unique; a duplicate returns a safe 409 without overwriting either record. Whitespace/case normalization is not added.
 - Anonymous callers get 401; authenticated callers without the needed permission get 403. Invalid/missing antiforgery tokens do not write records.
 - Writes never evaluate formulas or fetch URLs; source values are stored as text.
@@ -42,4 +43,4 @@ An administrator signs in, views active product records, and creates a record wh
 
 ## Out of scope
 
-Record editing/deletion, search/filter/sort controls, role/user administration, full import workflow, typed parsing, audit-history UI, and exposing the app to LAN/internet. The initial list/create delivery did not write audit events; the follow-up audit behavior is specified separately. Do not invent max lengths or mandatory fields without an approved rule.
+Record deletion, search/filter/sort controls, role/user administration, full import workflow, typed parsing, audit-history UI, and exposing the app to LAN/internet. Do not invent max lengths or mandatory fields without an approved rule.

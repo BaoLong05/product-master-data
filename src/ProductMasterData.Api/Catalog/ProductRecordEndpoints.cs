@@ -27,6 +27,8 @@ public static class ProductRecordEndpoints
             .RequireAuthorization(PermissionPolicies.For("audit.read"));
         records.MapPost("", CreateAsync)
             .RequireAuthorization(PermissionPolicies.For("records.create"));
+        records.MapPut("/{id:guid}", UpdateAsync)
+            .RequireAuthorization(PermissionPolicies.For("records.update"));
         return endpoints;
     }
 
@@ -185,6 +187,95 @@ public static class ProductRecordEndpoints
         return Results.CreatedAtRoute("GetProductRecord", new { id = record.Id }, ToResponse(record));
     }
 
+    private static async Task<IResult> UpdateAsync(
+        Guid id,
+        UpdateProductRecordRequest request,
+        ProductMasterDataDbContext database,
+        IAntiforgery antiforgery,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!await antiforgery.IsRequestValidAsync(httpContext))
+        {
+            return Results.BadRequest();
+        }
+
+        if (!Guid.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var record = await database.ProductRecords
+            .SingleOrDefaultAsync(item => item.Id == id && !item.IsDeleted, cancellationToken);
+        if (record is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (record.Version != request.Version)
+        {
+            return Results.Conflict(new ApiErrorResponse("record_version_conflict", "The record has changed. Reload it before saving."));
+        }
+
+        if (!string.IsNullOrEmpty(request.MCode) && await database.ProductRecords
+                .AnyAsync(item => item.Id != id && item.MCode == request.MCode, cancellationToken))
+        {
+            return DuplicateMCode();
+        }
+
+        var previousVersion = record.Version;
+        record.DateValue = request.DateValue;
+        record.CompanyName = request.CompanyName;
+        record.ItemName = request.ItemName;
+        record.MCode = request.MCode;
+        record.ItemCode = request.ItemCode;
+        record.ProductType = request.ProductType;
+        record.ProductStatus = request.ProductStatus;
+        record.ApprovalStatus = request.ApprovalStatus;
+        record.SampleOrProductionOrder = request.SampleOrProductionOrder;
+        record.CompanyNameLetters = request.CompanyNameLetters;
+        record.OldRegion = request.OldRegion;
+        record.SampleSavedDate = request.SampleSavedDate;
+        record.PicImage = request.PicImage;
+        record.PurchaseOrder = request.PurchaseOrder;
+        record.ProductionOrderPdf = request.ProductionOrderPdf;
+        record.Note = request.Note;
+        record.PrintedAt = request.PrintedAt;
+        record.DiscName = request.DiscName;
+        record.Soi = request.Soi;
+        record.Maso = request.Maso;
+        record.Denier = request.Denier;
+        record.Price = request.Price;
+        record.Region = request.Region;
+        record.Quantity = request.Quantity;
+        record.PicUrl = request.PicUrl;
+        record.InternalItem = request.InternalItem;
+        record.Request = request.Request;
+        record.AdvanceVersion();
+        database.AuditEvents.Add(AuditEvent.Create(
+            actorId,
+            "records.updated",
+            RecordTarget(record.Id),
+            "succeeded",
+            httpContext.TraceIdentifier,
+            JsonSerializer.Serialize(new { recordId = record.Id, previousVersion, version = record.Version })));
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new ApiErrorResponse("record_version_conflict", "The record has changed. Reload it before saving."));
+        }
+        catch (DbUpdateException exception) when (IsDuplicateMCodeViolation(exception))
+        {
+            return DuplicateMCode();
+        }
+
+        return Results.Ok(ToResponse(record));
+    }
+
     private static IResult DuplicateMCode() =>
         Results.Conflict(new ApiErrorResponse("duplicate_m_code", "A record with this M.CODE already exists."));
 
@@ -242,6 +333,36 @@ public sealed record ProductRecordAuditResponse(
     JsonElement Metadata);
 
 public sealed record CreateProductRecordRequest(
+    string? DateValue = null,
+    string? CompanyName = null,
+    string? ItemName = null,
+    string? MCode = null,
+    string? ItemCode = null,
+    string? ProductType = null,
+    string? ProductStatus = null,
+    string? ApprovalStatus = null,
+    string? SampleOrProductionOrder = null,
+    string? CompanyNameLetters = null,
+    string? OldRegion = null,
+    string? SampleSavedDate = null,
+    string? PicImage = null,
+    string? PurchaseOrder = null,
+    string? ProductionOrderPdf = null,
+    string? Note = null,
+    string? PrintedAt = null,
+    string? DiscName = null,
+    string? Soi = null,
+    string? Maso = null,
+    string? Denier = null,
+    string? Price = null,
+    string? Region = null,
+    string? Quantity = null,
+    string? PicUrl = null,
+    string? InternalItem = null,
+    string? Request = null);
+
+public sealed record UpdateProductRecordRequest(
+    long Version,
     string? DateValue = null,
     string? CompanyName = null,
     string? ItemName = null,
