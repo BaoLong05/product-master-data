@@ -49,7 +49,9 @@ type ProductRecordPage = {
   totalCount: number
 }
 type ProductRecordDetail = ProductRecordForm & { id: string; version: number }
-type ImportPreview = { worksheets: { name: string; headers: (string | null)[] }[] }
+type ImportPreviewRow = { rowNumber: number; values: (string | null)[]; formulaColumns: number[] }
+type ImportWorksheet = { name: string; headers: (string | null)[]; rows?: ImportPreviewRow[] }
+type ImportPreview = { worksheets: ImportWorksheet[] }
 
 const pageSize = 50
 const formFields: { key: keyof ProductRecordForm; label: string; multiline?: boolean }[] = [
@@ -133,6 +135,8 @@ function App() {
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
+  const [selectedWorksheetName, setSelectedWorksheetName] = useState('')
+  const [rowPreview, setRowPreview] = useState<ImportWorksheet | null>(null)
   const [importError, setImportError] = useState('')
   const [importBusy, setImportBusy] = useState(false)
 
@@ -199,10 +203,8 @@ function App() {
     setPage(1)
   }
 
-  const handlePreviewImport = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const requestImportPreview = async (worksheetName?: string) => {
     setImportError('')
-    setImportPreview(null)
     if (!importFile) {
       setImportError('Vui lòng chọn tệp .xlsx để xem trước.')
       return
@@ -211,14 +213,38 @@ function App() {
     setImportBusy(true)
     try {
       const token = await requestAntiforgeryToken()
-      const response = await fetch('/api/v1/imports/preview', createImportPreviewRequest(importFile, token))
+      const response = await fetch('/api/v1/imports/preview', createImportPreviewRequest(importFile, token, worksheetName))
       if (!response.ok) throw new Error(await responseMessage(response))
-      setImportPreview(await response.json() as ImportPreview)
+      const preview = await response.json() as ImportPreview
+      if (worksheetName === undefined) {
+        setImportPreview(preview)
+        setSelectedWorksheetName(preview.worksheets[0]?.name ?? '')
+        setRowPreview(null)
+      } else {
+        setRowPreview(preview.worksheets[0] ?? null)
+      }
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Không thể đọc tệp Excel.')
     } finally {
       setImportBusy(false)
     }
+  }
+
+  const handlePreviewImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setImportPreview(null)
+    setSelectedWorksheetName('')
+    setRowPreview(null)
+    await requestImportPreview()
+  }
+
+  const handlePreviewRows = async () => {
+    if (!selectedWorksheetName) {
+      setImportError('Chọn một worksheet trước khi xem dòng mẫu.')
+      return
+    }
+    setRowPreview(null)
+    await requestImportPreview(selectedWorksheetName)
   }
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -425,7 +451,7 @@ function App() {
           <div className="section-heading">
             <div><p className="eyebrow">NHẬP DỮ LIỆU · BƯỚC 1</p><h2 id="import-preview-title">Kiểm tra tệp Excel</h2></div>
           </div>
-          <p className="form-hint">Tải tệp .xlsx để xem tên sheet và tiêu đề cột. Bước này chỉ đọc thông tin cấu trúc, chưa lưu hay nhập bất kỳ hồ sơ nào.</p>
+          <p className="form-hint">Tải tệp .xlsx để xem tên sheet, tiêu đề cột và tối đa 10 dòng mẫu trong sheet đã chọn. Ô công thức được ẩn; bước này chưa xác thực hoặc nhập hồ sơ.</p>
           {importError && <p className="alert alert-error" role="alert">{importError}</p>}
           <form className="import-preview-form" onSubmit={(event) => void handlePreviewImport(event)}>
             <label className="sr-only" htmlFor="import-workbook">Chọn tệp Excel .xlsx</label>
@@ -433,23 +459,68 @@ function App() {
               id="import-workbook"
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setImportError('') }}
+              disabled={importBusy}
+              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setSelectedWorksheetName(''); setRowPreview(null); setImportError('') }}
             />
             <button className="button button-secondary" type="submit" disabled={importBusy || !importFile}>
               {importBusy ? 'Đang kiểm tra…' : 'Xem sheet và tiêu đề'}
             </button>
           </form>
           {importPreview && (
-            <div className="import-worksheets" aria-live="polite">
-              {importPreview.worksheets.map((sheet) => (
-                <section className="import-worksheet" key={sheet.name}>
-                  <h3>{sheet.name}</h3>
-                  {sheet.headers.length ? (
-                    <ol>{sheet.headers.map((header, index) => <li key={`${sheet.name}-${index}`}>{header || `Cột ${index + 1} (trống)`}</li>)}</ol>
-                  ) : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
+            <>
+              {importPreview.worksheets.length > 0 && (
+                <div className="import-sheet-controls">
+                  <div className="import-sheet-select">
+                    <label htmlFor="import-worksheet">Worksheet cần xem</label>
+                    <select
+                      id="import-worksheet"
+                      value={selectedWorksheetName}
+                      disabled={importBusy}
+                      onChange={(event) => { setSelectedWorksheetName(event.target.value); setRowPreview(null); setImportError('') }}
+                    >
+                      {importPreview.worksheets.map((sheet) => <option key={sheet.name} value={sheet.name}>{sheet.name}</option>)}
+                    </select>
+                  </div>
+                  <button className="button button-secondary" type="button" disabled={importBusy || !selectedWorksheetName} onClick={() => void handlePreviewRows()}>
+                    {importBusy ? 'Đang đọc…' : 'Xem 10 dòng đầu'}
+                  </button>
+                </div>
+              )}
+              <div className="import-worksheets" aria-live="polite">
+                {importPreview.worksheets.filter((sheet) => sheet.name === selectedWorksheetName).map((sheet) => (
+                  <section className="import-worksheet" key={sheet.name}>
+                    <h3>{sheet.name}</h3>
+                    {sheet.headers.length ? (
+                      <ol>{sheet.headers.map((header, index) => <li key={`${sheet.name}-${index}`}>{header || `Cột ${index + 1} (trống)`}</li>)}</ol>
+                    ) : <p>Không tìm thấy tiêu đề ở hàng đầu tiên.</p>}
+                  </section>
+                ))}
+              </div>
+              {rowPreview && (
+                <section className="import-row-preview" aria-live="polite" aria-labelledby="import-row-preview-title">
+                  <h3 id="import-row-preview-title">Dòng mẫu — {rowPreview.name}</h3>
+                  {rowPreview.rows?.length ? (
+                    <>
+                      <div className="import-row-table-scroll">
+                        <table className="import-row-table">
+                          <caption className="sr-only">Tối đa 10 dòng dữ liệu thô từ worksheet đã chọn</caption>
+                          <thead><tr><th scope="col">Dòng Excel</th>{rowPreview.headers.map((header, index) => <th scope="col" key={index}>{header || `Cột ${index + 1}`}</th>)}</tr></thead>
+                          <tbody>
+                            {rowPreview.rows.map((row) => (
+                              <tr key={row.rowNumber}>
+                                <th scope="row">{row.rowNumber}</th>
+                                {row.values.map((value, index) => <td key={index}>{row.formulaColumns.includes(index + 1) ? 'Công thức bị ẩn' : value ?? ''}</td>)}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="import-preview-note">Giá trị công thức và kết quả lưu sẵn không được hiển thị hoặc đánh giá.</p>
+                    </>
+                  ) : <p>Worksheet không có dòng dữ liệu mẫu sau hàng tiêu đề.</p>}
                 </section>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </section>
 

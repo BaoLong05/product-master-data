@@ -18,12 +18,13 @@ public static class ImportPreviewEndpoints
             .RequireAuthorization(PermissionPolicies.For("imports.preview"))
             .WithMetadata(
                 new RequestSizeLimitAttribute(MaximumRequestBytes),
-                new RequestFormLimitsAttribute { MultipartBodyLengthLimit = MaximumWorkbookBytes });
+                new RequestFormLimitsAttribute { MultipartBodyLengthLimit = MaximumWorkbookBytes, ValueLengthLimit = 128 });
         return endpoints;
     }
 
     private static async Task<IResult> PreviewAsync(
         IFormFile? file,
+        [FromForm] string? worksheetName,
         IAntiforgery antiforgery,
         IWorkbookPreviewReader previewReader,
         HttpContext httpContext,
@@ -59,7 +60,7 @@ public static class ImportPreviewEndpoints
 
         try
         {
-            return Results.Ok(previewReader.ReadHeaders(buffer.GetBuffer().AsMemory(0, (int)buffer.Length)));
+            return Results.Ok(previewReader.ReadPreview(buffer.GetBuffer().AsMemory(0, (int)buffer.Length), worksheetName));
         }
         catch (InvalidWorkbookException exception)
         {

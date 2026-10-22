@@ -18,4 +18,13 @@ describe('createImportPreviewRequest', () => {
     expect(uploadedFile.name).toBe('products.xlsx')
     expect(uploadedFile.type).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   })
+
+  test('includes the selected worksheet name in the multipart request', () => {
+    const file = new File(['workbook'], 'products.xlsx')
+    const request = createImportPreviewRequest(file, 'csrf-request-token', 'Inventory')
+    const body = request.body as FormData
+
+    expect(body.get('worksheetName')).toBe('Inventory')
+    expect(request.headers).toEqual({ 'X-CSRF-TOKEN': 'csrf-request-token' })
+  })
 })
