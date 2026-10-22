@@ -4,7 +4,7 @@ This is an implementation sequence, not a claim that features exist. Deliver one
 
 ## Phase 0 — documentation and bootstrap (complete)
 
-Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript client are in place. The product-record schema, list/detail/create workflow, audited edit/soft-delete, and catalog search/filter are implemented; audit-history UI and import remain open.
+Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript client are in place. The product-record schema, list/detail/create workflow, audited edit/soft-delete, catalog search/filter, and read-only record audit-history UI are implemented; the broader import workflow remains open.
 
 ## Phase 1 — API foundation (in progress)
 
@@ -16,7 +16,7 @@ Persisted local identity/role/permission schema and the permission catalog, safe
 
 ## Phase 3 — record management
 
-Delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, signed-in React list/create/edit/soft-delete UI, and catalog search/filter. Global search performs case-insensitive substring matching across all 27 source fields; each source field also has an individual substring filter. Search and filters combine with pagination on active records. Record create/update/soft-delete write append-only audit events. Update and soft-delete require current versions and increment them to prevent stale overwrites. Remaining: restore/permanent-erasure policy, PostgreSQL-backed concurrent API tests for record mutations, audit-history UI, and broader UI permission affordances. Import/export and identity-change audit are not implemented.
+Delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, signed-in React list/create/edit/soft-delete UI, catalog search/filter, and a per-record read-only audit-history panel. Global search performs case-insensitive substring matching across all 27 source fields; each source field also has an individual substring filter. Search and filters combine with pagination on active records. Record create/update/soft-delete write append-only audit events. Update and soft-delete require current versions and increment them to prevent stale overwrites. Remaining: restore/permanent-erasure policy, PostgreSQL-backed concurrent API tests for record mutations, and broader UI permission affordances. Import/export and identity-change audit are not implemented.
 
 ## Phase 4 — safe Excel import (in progress)
 

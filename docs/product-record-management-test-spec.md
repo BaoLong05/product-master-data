@@ -48,4 +48,4 @@ An administrator signs in, views active product records, searches across all sou
 
 ## Out of scope
 
-Record restore/permanent erasure, sorting, role/user administration, full import workflow, typed parsing, audit-history UI, and exposing the app to LAN/internet. Do not invent max lengths or mandatory fields without an approved rule.
+Record restore/permanent erasure, sorting, role/user administration, full import workflow, typed parsing, and exposing the app to LAN/internet. Audit-history UI is specified and delivered separately in `product-record-audit-history-ui-test-spec.md`. Do not invent max lengths or mandatory fields without an approved rule.

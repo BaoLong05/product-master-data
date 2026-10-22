@@ -1,6 +1,6 @@
 # Product record audit test specification
 
-Status: implemented for successful product-record creation, update, and soft-delete, with a permission-protected API read route and PostgreSQL append-only enforcement. Audit for imports, exports, and identity/permission changes remains open; the React UI does not yet render the history.
+Status: implemented for successful product-record creation, update, and soft-delete, with a permission-protected API read route, PostgreSQL append-only enforcement, and a read-only per-record React history panel. Audit for imports, exports, and identity/permission changes remains open.
 
 ## User and security behavior
 
