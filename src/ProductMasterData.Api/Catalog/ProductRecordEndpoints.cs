@@ -1,8 +1,11 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using ProductMasterData.Api.Identity;
+using ProductMasterData.Domain.Audit;
 using ProductMasterData.Domain.Catalog;
 using ProductMasterData.Infrastructure.Persistence;
 
@@ -20,6 +23,8 @@ public static class ProductRecordEndpoints
         records.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetProductRecord")
             .RequireAuthorization(PermissionPolicies.For("records.read"));
+        records.MapGet("/{id:guid}/audit", GetAuditAsync)
+            .RequireAuthorization(PermissionPolicies.For("audit.read"));
         records.MapPost("", CreateAsync)
             .RequireAuthorization(PermissionPolicies.For("records.create"));
         return endpoints;
@@ -72,6 +77,40 @@ public static class ProductRecordEndpoints
             : Results.Ok(ToResponse(record));
     }
 
+    private static async Task<IResult> GetAuditAsync(
+        Guid id,
+        ProductMasterDataDbContext database,
+        CancellationToken cancellationToken)
+    {
+        if (!await database.ProductRecords.AsNoTracking().AnyAsync(record => record.Id == id, cancellationToken))
+        {
+            return Results.NotFound();
+        }
+
+        var events = await database.AuditEvents
+            .AsNoTracking()
+            .Where(auditEvent => auditEvent.Target == RecordTarget(id))
+            .OrderBy(auditEvent => auditEvent.OccurredAt)
+            .ThenBy(auditEvent => auditEvent.EventId)
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(events.Select(auditEvent => new ProductRecordAuditResponse(
+            auditEvent.EventId,
+            auditEvent.ActorId,
+            auditEvent.OccurredAt,
+            auditEvent.Action,
+            auditEvent.Target,
+            auditEvent.Outcome,
+            auditEvent.CorrelationId,
+            ParseMetadata(auditEvent.MetadataJson))));
+    }
+
+    private static JsonElement ParseMetadata(string metadataJson)
+    {
+        using var document = JsonDocument.Parse(metadataJson);
+        return document.RootElement.Clone();
+    }
+
     private static async Task<IResult> CreateAsync(
         CreateProductRecordRequest request,
         ProductMasterDataDbContext database,
@@ -82,6 +121,11 @@ public static class ProductRecordEndpoints
         if (!await antiforgery.IsRequestValidAsync(httpContext))
         {
             return Results.BadRequest();
+        }
+
+        if (!Guid.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId))
+        {
+            return Results.Unauthorized();
         }
 
         if (!string.IsNullOrEmpty(request.MCode) && await database.ProductRecords
@@ -122,6 +166,13 @@ public static class ProductRecordEndpoints
         };
 
         database.ProductRecords.Add(record);
+        database.AuditEvents.Add(AuditEvent.Create(
+            actorId,
+            "records.created",
+            RecordTarget(record.Id),
+            "succeeded",
+            httpContext.TraceIdentifier,
+            JsonSerializer.Serialize(new { recordId = record.Id })));
         try
         {
             await database.SaveChangesAsync(cancellationToken);
@@ -136,6 +187,8 @@ public static class ProductRecordEndpoints
 
     private static IResult DuplicateMCode() =>
         Results.Conflict(new ApiErrorResponse("duplicate_m_code", "A record with this M.CODE already exists."));
+
+    private static string RecordTarget(Guid recordId) => $"product_records/{recordId:D}";
 
     private static bool IsDuplicateMCodeViolation(DbUpdateException exception) =>
         exception.GetBaseException() is PostgresException
@@ -177,6 +230,16 @@ public static class ProductRecordEndpoints
         record.UpdatedAt,
         record.Version);
 }
+
+public sealed record ProductRecordAuditResponse(
+    Guid EventId,
+    Guid? ActorId,
+    DateTimeOffset OccurredAt,
+    string Action,
+    string Target,
+    string Outcome,
+    string CorrelationId,
+    JsonElement Metadata);
 
 public sealed record CreateProductRecordRequest(
     string? DateValue = null,

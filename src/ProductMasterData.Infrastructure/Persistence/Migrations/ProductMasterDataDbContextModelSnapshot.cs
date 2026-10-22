@@ -125,6 +125,56 @@ namespace ProductMasterData.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("ProductMasterData.Domain.Audit.AuditEvent", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<string>("MetadataJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("outcome");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("target");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("Target", "OccurredAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_audit_events_target_occurred_at");
+
+                    b.ToTable("audit_events", (string)null);
+                });
+
             modelBuilder.Entity("ProductMasterData.Domain.Catalog.ProductRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -578,6 +628,15 @@ namespace ProductMasterData.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ProductMasterData.Domain.Audit.AuditEvent", b =>
+                {
+                    b.HasOne("ProductMasterData.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_audit_events_actor_id");
                 });
 
             modelBuilder.Entity("ProductMasterData.Domain.Identity.RolePermission", b =>

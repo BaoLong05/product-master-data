@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -44,6 +45,79 @@ public sealed class ProductRecordEndpointTests
         var retrieved = await detail.Content.ReadFromJsonAsync<ProductRecordResponse>();
         Assert.Equal(created.Id, retrieved?.Id);
         Assert.Equal(created.MCode, retrieved?.MCode);
+    }
+
+    [Fact]
+    public async Task Creating_a_record_writes_a_safe_audit_event_readable_by_an_auditor()
+    {
+        const string userName = "record.audit.test";
+        const string password = "A-strong-record-audit-passphrase-2026";
+        const string mCode = "AUDIT-SAFE-001";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.create", "audit.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var createResponse = await client.PostAsJsonAsync("/api/v1/records", new
+        {
+            mCode,
+            note = "Do not copy this source value into audit metadata"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<ProductRecordResponse>();
+        Assert.NotNull(created);
+
+        using var auditResponse = await client.GetAsync($"/api/v1/records/{created.Id}/audit");
+
+        Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
+        var events = await auditResponse.Content.ReadFromJsonAsync<List<ProductRecordAuditResponse>>();
+        var auditEvent = Assert.Single(events!);
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        var actorId = (await database.Users.SingleAsync(item => item.UserName == userName)).Id;
+        Assert.NotEqual(Guid.Empty, auditEvent.EventId);
+        Assert.Equal(actorId, auditEvent.ActorId);
+        Assert.Equal("records.created", auditEvent.Action);
+        Assert.Equal($"product_records/{created.Id:D}", auditEvent.Target);
+        Assert.Equal("succeeded", auditEvent.Outcome);
+        Assert.Equal(TimeSpan.Zero, auditEvent.OccurredAt.Offset);
+        Assert.False(string.IsNullOrWhiteSpace(auditEvent.CorrelationId));
+        Assert.Equal(created.Id, auditEvent.Metadata.GetProperty("recordId").GetGuid());
+        Assert.Single(auditEvent.Metadata.EnumerateObject());
+        Assert.DoesNotContain(mCode, auditEvent.Metadata.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Do not copy this source value", auditEvent.Metadata.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Record_read_permission_does_not_grant_audit_read_access()
+    {
+        const string userName = "record.audit.denied.test";
+        const string password = "A-strong-record-audit-denied-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        var recordId = await SeedRecordAsync(factory, "AUDIT-DENIED-001", "Existing record");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.GetAsync($"/api/v1/records/{recordId}/audit");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Auditor_gets_not_found_for_an_unknown_product_record()
+    {
+        const string userName = "record.audit.missing.test";
+        const string password = "A-strong-record-audit-missing-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "audit.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var response = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}/audit");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -92,6 +166,7 @@ public sealed class ProductRecordEndpointTests
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(0, await CountRecordsAsync(factory));
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
     }
 
     [Fact]
@@ -102,12 +177,15 @@ public sealed class ProductRecordEndpointTests
 
         using var listResponse = await client.GetAsync("/api/v1/records");
         using var detailResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}");
+        using var auditResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}/audit");
         using var createResponse = await client.PostAsJsonAsync("/api/v1/records", new { itemName = "Anonymous" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, detailResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, auditResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, createResponse.StatusCode);
         Assert.Equal(0, await CountRecordsAsync(factory));
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
     }
 
     [Fact]
@@ -125,6 +203,7 @@ public sealed class ProductRecordEndpointTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(0, await CountRecordsAsync(factory));
+        Assert.Equal(0, await CountAuditEventsAsync(factory));
     }
 
     [Fact]
@@ -144,6 +223,7 @@ public sealed class ProductRecordEndpointTests
         Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
         Assert.Equal(1, await CountRecordsAsync(factory));
+        Assert.Equal(1, await CountAuditEventsAsync(factory));
         var location = Assert.IsAssignableFrom<Uri>(firstResponse.Headers.Location);
         using var retrievedResponse = await client.GetAsync(location);
         var retrieved = await retrievedResponse.Content.ReadFromJsonAsync<ProductRecordResponse>();
@@ -155,6 +235,15 @@ public sealed class ProductRecordEndpointTests
     private sealed record ProductRecordPageResponse(IReadOnlyList<ProductRecordListItem> Items, int Page, int PageSize, int TotalCount);
     private sealed record ProductRecordListItem(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? ProductStatus, DateTimeOffset UpdatedAt);
     private sealed record ProductRecordResponse(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? Note);
+    private sealed record ProductRecordAuditResponse(
+        Guid EventId,
+        Guid? ActorId,
+        DateTimeOffset OccurredAt,
+        string Action,
+        string Target,
+        string Outcome,
+        string CorrelationId,
+        JsonElement Metadata);
 
     private static async Task<HttpClient> CreateAuthenticatedClientAsync(
         LoginApiFactory factory,
@@ -184,6 +273,13 @@ public sealed class ProductRecordEndpointTests
         return await database.ProductRecords.CountAsync();
     }
 
+    private static async Task<int> CountAuditEventsAsync(LoginApiFactory factory)
+    {
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        return await database.AuditEvents.CountAsync();
+    }
+
     private static async Task AddAntiforgeryTokenAsync(HttpClient client)
     {
         using var response = await client.GetAsync("/api/v1/auth/csrf");
@@ -206,11 +302,13 @@ public sealed class ProductRecordEndpointTests
         await database.SaveChangesAsync();
     }
 
-    private static async Task SeedRecordAsync(LoginApiFactory factory, string mCode, string itemName)
+    private static async Task<Guid> SeedRecordAsync(LoginApiFactory factory, string mCode, string itemName)
     {
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
-        database.ProductRecords.Add(new ProductRecord { MCode = mCode, ItemName = itemName });
+        var record = new ProductRecord { MCode = mCode, ItemName = itemName };
+        database.ProductRecords.Add(record);
         await database.SaveChangesAsync();
+        return record.Id;
     }
 }

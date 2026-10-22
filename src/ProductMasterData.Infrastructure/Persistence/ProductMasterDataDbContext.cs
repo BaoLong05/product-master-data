@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using ProductMasterData.Domain.Audit;
 using ProductMasterData.Domain.Catalog;
 using ProductMasterData.Domain.Identity;
 using ProductMasterData.Infrastructure.Identity;
@@ -10,6 +11,7 @@ public sealed class ProductMasterDataDbContext(DbContextOptions<ProductMasterDat
     : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options)
 {
     public DbSet<ProductRecord> ProductRecords => Set<ProductRecord>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 

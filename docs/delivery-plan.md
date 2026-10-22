@@ -4,7 +4,7 @@ This is an implementation sequence, not a claim that features exist. Deliver one
 
 ## Phase 0 — documentation and bootstrap (complete)
 
-Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript client are in place. The product-record schema and first list/detail/create workflow are implemented; update/delete, search/filter, import, and audit remain open.
+Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL, Bun root scripts, .NET layered solution, and React TypeScript client are in place. The product-record schema, list/detail/create workflow, and append-only creation audit are implemented; update/delete, search/filter, audit UI, and import remain open.
 
 ## Phase 1 — API foundation (in progress)
 
@@ -12,11 +12,11 @@ The operational API foundation provides liveness/readiness health endpoints, a P
 
 ## Phase 2 — identity and permissions
 
-Persisted local identity/role/permission schema and the permission catalog, safe first-admin bootstrap, cookie login/logout, CSRF token validation, per-IP login throttling, and per-request active-user/security-stamp validation are implemented. Product record list/detail routes require `records.read`; create requires `records.create` and antiforgery validation. Logout rotates the user's stamp to revoke copied cookies for all sessions; per-device session management remains unsupported. Remaining: user and role management, checkbox UI, update/delete authorization, audit trail, PostgreSQL-backed permission integration tests, and permission-matrix tests. Do not expose the create workflow beyond local development before audit coverage is added.
+Persisted local identity/role/permission schema and the permission catalog, safe first-admin bootstrap, cookie login/logout, CSRF token validation, per-IP login throttling, and per-request active-user/security-stamp validation are implemented. Product record list/detail routes require `records.read`; create requires `records.create` and antiforgery validation. Successful record creation is audited atomically; audit reads require `audit.read`, and PostgreSQL prevents event mutation/deletion. Logout rotates the user's stamp to revoke copied cookies for all sessions; per-device session management remains unsupported. Remaining: user and role management, checkbox UI, update/delete authorization and audit coverage for other operations, import/export audit, PostgreSQL-backed permission integration test setup, and permission-matrix tests. The application remains local-only pending the broader security and operations work.
 
 ## Phase 3 — record management
 
-First slice delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, and signed-in React list/create UI. Remaining: update/soft-delete, search/filter, PostgreSQL-backed record API/concurrency tests, append-only audit events, and broader UI permission affordances. The current create workflow is not production-ready until audit coverage is added.
+First slice delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, and signed-in React list/create UI. Record creation now writes an append-only audit event, and auditors can read it through the permission-protected API. Remaining: update/soft-delete, search/filter, PostgreSQL-backed concurrent API tests for record creation, an audit-history UI, and broader UI permission affordances. Audit for operations beyond create is not implemented.
 
 ## Phase 4 — safe Excel import
 

@@ -1,6 +1,6 @@
 # Product record entry and browse test specification
 
-Status: implemented as the first local-only vertical slice; audit coverage remains open.
+Status: implemented as the first local-only vertical slice. Record-creation audit and its PostgreSQL persistence rules are covered by `docs/product-record-audit-test-spec.md`; audit for later mutations remains open.
 
 ## User workflow
 
@@ -42,4 +42,4 @@ An administrator signs in, views active product records, and creates a record wh
 
 ## Out of scope
 
-Record editing/deletion, search/filter/sort controls, role/user administration, full import workflow, typed parsing, and exposing the app to LAN/internet. This slice does not write audit events; implement append-only audit before exposing record creation beyond local development. Do not invent max lengths or mandatory fields without an approved rule.
+Record editing/deletion, search/filter/sort controls, role/user administration, full import workflow, typed parsing, audit-history UI, and exposing the app to LAN/internet. The initial list/create delivery did not write audit events; the follow-up audit behavior is specified separately. Do not invent max lengths or mandatory fields without an approved rule.

@@ -1,6 +1,6 @@
 # Authentication and authorization design
 
-Status: local first-admin bootstrap and cookie login/logout exist, including CSRF validation, login throttling, and per-request active-user/security-stamp validation. Product record list/detail endpoints enforce the current persisted `records.read` grant; create enforces `records.create` and antiforgery validation. Account/role management, record update/delete, import/export enforcement, and audit events remain pending; all application data access must remain deny-by-default.
+Status: local first-admin bootstrap and cookie login/logout exist, including CSRF validation, login throttling, and per-request active-user/security-stamp validation. Product record list/detail endpoints enforce the current persisted `records.read` grant; create enforces `records.create` and antiforgery validation and writes a safe creation audit event atomically. `GET /api/v1/records/{id}/audit` enforces the separate persisted `audit.read` grant. Account/role management, record update/delete, import/export enforcement, and audit coverage for operations other than record creation remain pending; all application data access must remain deny-by-default.
 
 ## Permission model
 
@@ -49,7 +49,7 @@ Use framework-supported adaptive password hashing; no default credentials. Accou
 
 Authenticated cookies are checked against the current active-user state and Identity security stamp on every request. Logout rotates the stamp and therefore revokes all sessions for that user; this incurs a persistence read on authenticated requests and requires the identity store to be available. Any future account, credential, role, or permission change that must take effect immediately must also rotate the security stamp before reporting success, because role/permission claims in existing cookies are snapshots. Per-device revocation is not implemented.
 
-Audit sensitive record changes/deletes, import commits, exports, user/role/permission changes with actor, UTC timestamp, action, target, outcome, correlation ID and safe metadata. Audit events are append-only to normal application users; avoid recording passwords, tokens, or full spreadsheet row values.
+Audit sensitive record changes/deletes, import commits, exports, user/role/permission changes with actor, UTC timestamp, action, target, outcome, correlation ID and safe metadata. Record creation currently persists the actor, UTC timestamp, `records.created` action, record target, successful outcome, server trace ID, and record ID only; source fields are not copied. `GET /api/v1/records/{id}/audit` requires `audit.read`. PostgreSQL triggers reject audit `UPDATE`, `DELETE`, and `TRUNCATE`; the actor FK uses `RESTRICT` so deleting a referenced account cannot rewrite history. Audit coverage for edits, deletes, imports, exports, and identity/permission changes remains pending. Avoid recording passwords, tokens, or full spreadsheet row values.
 
 ## Required tests
 

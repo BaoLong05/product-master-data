@@ -1,6 +1,6 @@
 # Database schema design
 
-Status: product catalog and local identity/permission persistence are migrated. PostgreSQL is the system of record. Import history and audit tables remain designed below and will be migrated alongside their application slices so no unused subsystems are shipped prematurely.
+Status: product catalog, local identity/permission persistence, and append-only audit events are migrated. PostgreSQL is the system of record. Import history remains planned and will be migrated with its application workflow.
 
 ## Confirmed invariants
 
@@ -32,15 +32,15 @@ Indexes/constraints:
 
 ASP.NET Core Identity supplies `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, `AspNetUserClaims`, `AspNetRoleClaims`, `AspNetUserLogins`, and `AspNetUserTokens`. User/role entities and user-role assignments use GUID identifiers; ancillary Identity tables use the framework's standard key shapes. `AspNetUsers` contains an `IsActive` flag and Identity's password-hash field; it never stores plaintext passwords. `NormalizedUserName` is uniquely indexed. Email uniqueness/login semantics are not configured until the login identifier is confirmed. `AspNetRoles` has an `IsBuiltIn` flag.
 
-`permissions` stores the stable keys from `docs/authorization.md`; they are seeded once by migration. `role_permissions` has composite key `(role_id, permission_key)`, a foreign key to `AspNetRoles`, and a restrictive foreign key to the permission catalog. Role-to-user assignment uses Identity's `AspNetUserRoles` composite key. No user, role, or administrator is seeded by migration. Bootstrap/login and catalogued permission policy/handler infrastructure exist; PostgreSQL provider tests cover grant lookup and revocation. No product-data endpoint is yet protected by a permission policy. Last-admin protection and role-assignment APIs remain unimplemented.
+`permissions` stores the stable keys from `docs/authorization.md`; they are seeded once by migration. `role_permissions` has composite key `(role_id, permission_key)`, a foreign key to `AspNetRoles`, and a restrictive foreign key to the permission catalog. Role-to-user assignment uses Identity's `AspNetUserRoles` composite key. No user, role, or administrator is seeded by migration. Bootstrap/login and catalogued permission policy/handler infrastructure exist; record endpoints enforce `records.read`/`records.create`, and record audit reads enforce `audit.read`. PostgreSQL provider tests cover permission lookup and revocation. Last-admin protection and role-assignment APIs remain unimplemented.
 
-## Planned import and audit tables (not yet migrated)
+## Planned import tables and implemented audit table
 
 1. `import_batches`: UUID ID, initiating user, safe source filename, content hash, status, started/completed timestamps and row counts. Do not retain original workbook by default.
 2. `import_row_errors`: batch ID, source row number, optional source header, stable error code and safe message; do not persist raw cell values by default.
-3. `audit_events`: append-only event ID, nullable actor for bootstrap/system actions, UTC timestamp, action, target, outcome, correlation ID and safe JSON metadata. No credentials or full spreadsheet rows.
+3. `audit_events`: migrated append-only event ID, nullable `actor_id` FK to `AspNetUsers` with `ON DELETE RESTRICT`, `occurred_at TIMESTAMPTZ`, `action`, `target`, `outcome`, `correlation_id`, and `metadata JSONB`. Index `(target, occurred_at DESC)` supports record history lookup. PostgreSQL triggers reject `UPDATE`, `DELETE`, and `TRUNCATE`. Successful record creation and its event are persisted by the same EF Core `SaveChanges` transaction; the event metadata contains only the record ID. No credentials or full source rows are logged.
 
-Add import/audit tables and their foreign keys when those vertical slices are implemented and tested. Import commit, duplicate reporting, and audit policies remain enforced by application services; database constraints provide integrity, not authorization.
+Add import tables with their application workflow. Import commit, duplicate reporting, and audit policies remain enforced by application services; database constraints provide integrity, not authorization. Audit write/read permissions are checked at the API boundary.
 
 ## Risks and follow-up decisions
 
