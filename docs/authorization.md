@@ -1,6 +1,6 @@
 # Authentication and authorization design
 
-Status: local first-admin bootstrap and cookie login/logout exist, including CSRF validation, login throttling, and per-request active-user/security-stamp validation. Permission enforcement and account/role management are still pending; all application data access must remain deny-by-default.
+Status: local first-admin bootstrap and cookie login/logout exist, including CSRF validation, login throttling, and per-request active-user/security-stamp validation. Catalogued permission policy/handler infrastructure checks current persisted role grants; no product-data endpoint currently uses it. Account/role management and endpoint-by-endpoint policy application remain pending; all application data access must remain deny-by-default.
 
 ## Permission model
 

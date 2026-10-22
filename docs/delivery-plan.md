@@ -12,7 +12,7 @@ The operational API foundation provides liveness/readiness health endpoints, a P
 
 ## Phase 2 — identity and permissions
 
-Persisted local identity/role/permission schema and the permission catalog, safe first-admin bootstrap, cookie login/logout, CSRF token validation, per-IP login throttling, and per-request active-user/security-stamp validation are implemented. Logout rotates the user's stamp to revoke copied cookies for all sessions; per-device session management remains unsupported. Remaining: user and role management, checkbox UI, server-side permission enforcement, audit trail, and permission-matrix integration tests. Do not ship broad CRUD before authorization behavior is enforceable.
+Persisted local identity/role/permission schema and the permission catalog, safe first-admin bootstrap, cookie login/logout, CSRF token validation, per-IP login throttling, and per-request active-user/security-stamp validation are implemented. Catalogued permission policies now have a server handler that checks current persisted role grants, but no product-data endpoint uses these policies yet. Logout rotates the user's stamp to revoke copied cookies for all sessions; per-device session management remains unsupported. Remaining: user and role management, checkbox UI, applying permission policies to every data endpoint, audit trail, PostgreSQL-backed permission integration tests, and permission-matrix tests. Do not ship broad CRUD before every endpoint's authorization behavior is enforceable and verified.
 
 ## Phase 3 — record management
 
