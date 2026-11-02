@@ -10,3 +10,22 @@ export function createImportPreviewRequest(file: File, csrfToken: string, worksh
     body: form,
   }
 }
+
+export function createImportValidationRequest(
+  file: File,
+  csrfToken: string,
+  worksheetName: string,
+  mCodeColumnNumber: number,
+): RequestInit {
+  const form = new FormData()
+  form.set('file', file)
+  form.set('worksheetName', worksheetName)
+  form.set('mCodeColumnNumber', String(mCodeColumnNumber))
+
+  return {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'X-CSRF-TOKEN': csrfToken },
+    body: form,
+  }
+}

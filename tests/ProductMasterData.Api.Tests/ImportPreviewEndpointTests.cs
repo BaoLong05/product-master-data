@@ -8,14 +8,82 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ProductMasterData.Application.Imports;
+using ProductMasterData.Domain.Catalog;
 using ProductMasterData.Domain.Identity;
 using ProductMasterData.Infrastructure.Identity;
+using ProductMasterData.Infrastructure.Imports;
 using ProductMasterData.Infrastructure.Persistence;
 
 namespace ProductMasterData.Api.Tests;
 
 public sealed class ImportPreviewEndpointTests
 {
+    [Fact]
+    public void Workbook_m_code_scanner_propagates_request_cancellation()
+    {
+        var scanner = new OpenXmlWorkbookPreviewReader();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => scanner.ScanMCode(
+            CreateWorkbook(("DATA", ["M.CODE"], 1)),
+            "DATA",
+            1,
+            cancellation.Token));
+    }
+
+    [Fact]
+    public void Workbook_m_code_scanner_rejects_sparse_rows_beyond_physical_row_limit()
+    {
+        var scanner = new OpenXmlWorkbookPreviewReader();
+
+        Assert.Throws<WorkbookRowLimitExceededException>(() => scanner.ScanMCode(
+            CreateWorkbookWithSparseMCodeRow(10_002),
+            "DATA",
+            1,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public void Workbook_m_code_scanner_counts_sparse_physical_rows_at_the_limit()
+    {
+        var scanner = new OpenXmlWorkbookPreviewReader();
+
+        var scan = scanner.ScanMCode(
+            CreateWorkbookWithSparseMCodeRow(10_001),
+            "DATA",
+            1,
+            CancellationToken.None);
+
+        Assert.Equal(10_000, scan.ScannedRows);
+        Assert.Equal(10_001, Assert.Single(scan.Values).RowNumber);
+    }
+
+    [Fact]
+    public void Workbook_m_code_scanner_rejects_a_cell_reference_for_a_different_row()
+    {
+        var scanner = new OpenXmlWorkbookPreviewReader();
+
+        Assert.Throws<InvalidWorkbookException>(() => scanner.ScanMCode(
+            CreateWorkbookWithSparseMCodeRow(2, 3),
+            "DATA",
+            1,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public void Workbook_m_code_scanner_rejects_row_numbers_outside_excel_limits()
+    {
+        var scanner = new OpenXmlWorkbookPreviewReader();
+
+        Assert.Throws<InvalidWorkbookException>(() => scanner.ScanMCode(
+            CreateWorkbookWithSparseMCodeRow(1_048_577),
+            "DATA",
+            1,
+            CancellationToken.None));
+    }
+
     [Fact]
     public async Task Anonymous_user_cannot_preview_a_workbook()
     {
@@ -264,10 +332,334 @@ public sealed class ImportPreviewEndpointTests
         Assert.Equal(0, await database.AuditEvents.CountAsync());
     }
 
+    [Fact]
+    public async Task Duplicate_m_codes_in_workbook_return_exact_source_rows_without_echoing_keys()
+    {
+        const string userName = "import.validate.duplicate.test";
+        const string password = "A-strong-import-validate-duplicate-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 2))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var json = await response.Content.ReadAsStringAsync();
+        var validation = JsonSerializer.Deserialize<ImportValidationResponse>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal("DATA", validation.WorksheetName);
+        Assert.Equal(2, validation.ScannedRows);
+        Assert.Equal(2, validation.DuplicateRows);
+        Assert.Collection(validation.Issues,
+            issue =>
+            {
+                Assert.Equal(2, issue.RowNumber);
+                Assert.Equal("duplicate_m_code", issue.Code);
+            },
+            issue =>
+            {
+                Assert.Equal(3, issue.RowNumber);
+                Assert.Equal("duplicate_m_code", issue.Code);
+            });
+        using (var document = JsonDocument.Parse(json))
+        {
+            var issuePropertyNames = document.RootElement
+                .GetProperty("issues")
+                .EnumerateArray()
+                .SelectMany(issue => issue.EnumerateObject().Select(property => property.Name))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(new[] { "code", "rowNumber" }, issuePropertyNames);
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal(0, await database.ProductRecords.CountAsync());
+        Assert.Equal(0, await database.AuditEvents.CountAsync());
+    }
+
+    [Fact]
+    public async Task Anonymous_user_cannot_validate_a_workbook()
+    {
+        using var factory = new LoginApiFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task M_code_matching_an_existing_record_is_reported_without_echoing_the_key()
+    {
+        const string userName = "import.validate.existing.test";
+        const string password = "A-strong-import-validate-existing-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            database.ProductRecords.Add(new ProductRecord { MCode = "1" });
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var validation = await response.Content.ReadFromJsonAsync<ImportValidationResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal(1, validation.ScannedRows);
+        Assert.Equal(1, validation.DuplicateRows);
+        var issue = Assert.Single(validation.Issues);
+        Assert.Equal(2, issue.RowNumber);
+        Assert.Equal("duplicate_m_code", issue.Code);
+    }
+
+    [Fact]
+    public async Task M_code_matching_a_soft_deleted_record_is_reported()
+    {
+        const string userName = "import.validate.soft-deleted.test";
+        const string password = "A-strong-import-validate-soft-deleted-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            var existing = new ProductRecord { MCode = "1" };
+            existing.SoftDelete();
+            database.ProductRecords.Add(existing);
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var validation = await response.Content.ReadFromJsonAsync<ImportValidationResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal(1, validation.DuplicateRows);
+        Assert.Equal(2, Assert.Single(validation.Issues).RowNumber);
+    }
+
+    [Fact]
+    public async Task M_code_shared_strings_are_compared_exactly_without_normalization()
+    {
+        const string userName = "import.validate.exact-string.test";
+        const string password = "A-strong-import-validate-exact-string-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            database.ProductRecords.Add(new ProductRecord { MCode = "KEY-A" });
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbookWithMCodeValues("KEY-A", "key-a", " KEY-A ", "")), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var json = await response.Content.ReadAsStringAsync();
+        var validation = JsonSerializer.Deserialize<ImportValidationResponse>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal(4, validation.ScannedRows);
+        Assert.Equal(1, validation.DuplicateRows);
+        Assert.Equal(2, Assert.Single(validation.Issues).RowNumber);
+        Assert.DoesNotContain("KEY-A", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Formula_cached_value_is_not_validated_as_m_code()
+    {
+        const string userName = "import.validate.formula.test";
+        const string password = "A-strong-import-validate-formula-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            database.ProductRecords.Add(new ProductRecord { MCode = "cached-secret" });
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        var workbook = CreateWorkbook([("DATA", ["Other", "M.CODE"], 1)], includeFormulaInFirstSheet: true);
+        content.Add(new ByteArrayContent(workbook), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("2"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var validation = await response.Content.ReadFromJsonAsync<ImportValidationResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal(1, validation.ScannedRows);
+        Assert.Equal(0, validation.DuplicateRows);
+    }
+
+    [Fact]
+    public async Task Missing_worksheet_selection_is_rejected()
+    {
+        const string userName = "import.validate.worksheet-required.test";
+        const string password = "A-strong-import-validate-worksheet-required-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var error = await response.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("missing_worksheet", error?.Code);
+    }
+
+    [Fact]
+    public async Task M_code_column_mapping_beyond_the_header_is_rejected()
+    {
+        const string userName = "import.validate.column-range.test";
+        const string password = "A-strong-import-validate-column-range-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("2"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var error = await response.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_m_code_column", error?.Code);
+    }
+
+    [Fact]
+    public async Task M_code_validation_requires_import_preview_in_addition_to_records_read()
+    {
+        const string userName = "import.validate.preview-denied.test";
+        const string password = "A-strong-import-validate-preview-denied-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task M_code_validation_requires_records_read_in_addition_to_import_preview()
+    {
+        const string userName = "import.validate.records-read-denied.test";
+        const string password = "A-strong-import-validate-records-read-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task M_code_validation_rejects_a_missing_antiforgery_token()
+    {
+        const string userName = "import.validate.csrf.test";
+        const string password = "A-strong-import-validate-csrf-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var error = await response.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_antiforgery_token", error?.Code);
+    }
+
+    [Fact]
+    public async Task Workbook_over_row_limit_is_rejected_without_partial_validation_results()
+    {
+        const string userName = "import.validate.row-limit.test";
+        const string password = "A-strong-import-validate-row-limit-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 10_001))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var error = await response.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("workbook_row_limit_exceeded", error?.Code);
+    }
+
     private sealed record ImportPreviewResponse(IReadOnlyList<WorksheetPreview> Worksheets);
     private sealed record WorksheetPreview(string Name, IReadOnlyList<string?> Headers, IReadOnlyList<ImportPreviewRow>? Rows);
     private sealed record ImportPreviewRow(int RowNumber, IReadOnlyList<string?> Values, IReadOnlyList<int> FormulaColumns);
     private sealed record ImportPreviewErrorResponse(string Code, string Message);
+    private sealed record ImportValidationResponse(string WorksheetName, int ScannedRows, int DuplicateRows, IReadOnlyList<ImportValidationIssue> Issues);
+    private sealed record ImportValidationIssue(int RowNumber, string Code);
     private sealed record CsrfTokenResponse(string? RequestToken);
     private sealed record LoginRequest(string UserName, string Password);
 
@@ -339,6 +731,81 @@ public sealed class ImportPreviewEndpointTests
                     <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">{cells}</row>{trailingRows}</sheetData></worksheet>
                     """);
             }
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateWorkbookWithMCodeValues(params string?[] mCodeValues)
+    {
+        var baseWorkbook = CreateWorkbook(("DATA", ["M.CODE"], mCodeValues.Length));
+        using var sourceStream = new MemoryStream(baseWorkbook);
+        using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: true);
+        using var outputStream = new MemoryStream();
+        using (var outputArchive = new ZipArchive(outputStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in sourceArchive.Entries.Where(entry =>
+                         entry.FullName is not "xl/sharedStrings.xml" and not "xl/worksheets/sheet1.xml"))
+            {
+                using var input = entry.Open();
+                using var output = outputArchive.CreateEntry(entry.FullName).Open();
+                input.CopyTo(output);
+            }
+
+            var sharedStringValues = new List<string> { "M.CODE" };
+            foreach (var value in mCodeValues.OfType<string>().Distinct(StringComparer.Ordinal))
+            {
+                if (!sharedStringValues.Contains(value, StringComparer.Ordinal))
+                {
+                    sharedStringValues.Add(value);
+                }
+            }
+
+            var sharedStringItems = string.Join("", sharedStringValues.Select(value =>
+                $"<si><t xml:space=\"preserve\">{System.Security.SecurityElement.Escape(value)}</t></si>"));
+            var sharedStringsXml = $"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="{mCodeValues.Count(value => value is not null) + 1}" uniqueCount="{sharedStringValues.Count}">{sharedStringItems}</sst>
+                """;
+            WriteEntry(outputArchive, "xl/sharedStrings.xml", sharedStringsXml);
+
+            var dataRows = string.Concat(mCodeValues.Select((value, index) =>
+            {
+                var row = index + 2;
+                return value is null
+                    ? $"<row r=\"{row}\" />"
+                    : $"<row r=\"{row}\"><c r=\"A{row}\" t=\"s\"><v>{sharedStringValues.IndexOf(value)}</v></c></row>";
+            }));
+            var worksheetXml = $"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row>{dataRows}</sheetData></worksheet>
+                """;
+            WriteEntry(outputArchive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        return outputStream.ToArray();
+    }
+
+    private static byte[] CreateWorkbookWithSparseMCodeRow(int rowNumber, int? cellReferenceRowNumber = null)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(CreateWorkbook(("DATA", ["M.CODE"], 1)));
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var worksheet = archive.GetEntry("xl/worksheets/sheet1.xml")
+                ?? throw new InvalidOperationException("The test workbook is missing its worksheet.");
+            string worksheetXml;
+            using (var reader = new StreamReader(worksheet.Open()))
+            {
+                worksheetXml = reader.ReadToEnd();
+            }
+
+            worksheet.Delete();
+            worksheetXml = worksheetXml
+                .Replace("r=\"2\"", $"r=\"{rowNumber}\"", StringComparison.Ordinal)
+                .Replace("A2", $"A{cellReferenceRowNumber ?? rowNumber}", StringComparison.Ordinal);
+            WriteEntry(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         return stream.ToArray();

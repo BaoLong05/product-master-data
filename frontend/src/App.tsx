@@ -3,7 +3,7 @@ import { buildCatalogQuery } from './catalog-search'
 import { ImportColumnMapping as ImportColumnMappingView } from './import-column-mapping-view'
 import { updateImportColumnMapping, type ImportColumnMapping, type ImportPreviewRow } from './import-column-mapping'
 import { ImportHeaderDiagnostics } from './import-header-diagnostics'
-import { createImportPreviewRequest } from './import-preview'
+import { createImportPreviewRequest, createImportValidationRequest } from './import-preview'
 import { loadRecordAudit, type ProductRecordAuditEvent } from './record-audit'
 import { RecordAuditHistory } from './record-audit-view'
 import { AppPreferencesProvider } from './app-preferences'
@@ -68,6 +68,7 @@ type RecordAuditPanelState = {
 }
 type ImportWorksheet = { name: string; headers: (string | null)[]; rows?: ImportPreviewRow[] }
 type ImportPreview = { worksheets: ImportWorksheet[] }
+type ImportValidation = { worksheetName: string; scannedRows: number; duplicateRows: number; issues: { rowNumber: number; code: string }[] }
 
 const pageSize = 50
 const formFields: { key: keyof ProductRecordForm; multiline?: boolean }[] = [
@@ -160,6 +161,7 @@ function AppContent() {
   const [importColumnMapping, setImportColumnMapping] = useState<ImportColumnMapping>({})
   const [importError, setImportError] = useState('')
   const [importBusy, setImportBusy] = useState(false)
+  const [importValidation, setImportValidation] = useState<ImportValidation | null>(null)
   const [auditPanel, setAuditPanel] = useState<RecordAuditPanelState | null>(null)
   const auditRequestGeneration = useRef(0)
 
@@ -271,6 +273,25 @@ function AppContent() {
     }
     setRowPreview(null)
     await requestImportPreview(selectedWorksheetName)
+  }
+
+  const handleValidateMCode = async () => {
+    const mappedColumn = Object.entries(importColumnMapping).find(([, target]) => target === 'mCode')
+    const columnNumber = Number(mappedColumn?.[0])
+    if (!importFile || !selectedWorksheetName || !Number.isInteger(columnNumber) || columnNumber < 1) return
+    setImportError('')
+    setImportValidation(null)
+    setImportBusy(true)
+    try {
+      const token = await requestAntiforgeryToken(t)
+      const response = await fetch('/api/v1/imports/validate', createImportValidationRequest(importFile, token, selectedWorksheetName, columnNumber))
+      if (!response.ok) throw new Error(await responseMessage(response, t))
+      setImportValidation(await response.json() as ImportValidation)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : t('error.importRead'))
+    } finally {
+      setImportBusy(false)
+    }
   }
 
   const closeAuditPanel = () => {
@@ -554,7 +575,7 @@ function AppContent() {
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               disabled={importBusy}
-              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setSelectedWorksheetName(''); setRowPreview(null); setImportColumnMapping({}); setImportError('') }}
+              onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportPreview(null); setSelectedWorksheetName(''); setRowPreview(null); setImportColumnMapping({}); setImportValidation(null); setImportError('') }}
             />
             <button className="button button-secondary" type="submit" disabled={importBusy || !importFile}>
               {importBusy ? t('import.checking') : t('import.showSheets')}
@@ -570,7 +591,7 @@ function AppContent() {
                       id="import-worksheet"
                       value={selectedWorksheetName}
                       disabled={importBusy}
-                      onChange={(event) => { setSelectedWorksheetName(event.target.value); setRowPreview(null); setImportColumnMapping({}); setImportError('') }}
+                      onChange={(event) => { setSelectedWorksheetName(event.target.value); setRowPreview(null); setImportColumnMapping({}); setImportValidation(null); setImportError('') }}
                     >
                       {importPreview.worksheets.map((sheet) => <option key={sheet.name} value={sheet.name}>{sheet.name}</option>)}
                     </select>
@@ -592,13 +613,23 @@ function AppContent() {
                           fields={localizedFormFields}
                           mapping={importColumnMapping}
                           rows={rowPreview?.name === sheet.name ? rowPreview.rows : undefined}
-                          onChange={(columnNumber, targetKey) => setImportColumnMapping((current) => updateImportColumnMapping(current, columnNumber, targetKey, localizedFormFields))}
+                          onChange={(columnNumber, targetKey) => { setImportValidation(null); setImportColumnMapping((current) => updateImportColumnMapping(current, columnNumber, targetKey, localizedFormFields)) }}
                         />
+                        <button className="button button-secondary" type="button" disabled={importBusy || !rowPreview || !Object.values(importColumnMapping).includes('mCode')} onClick={() => void handleValidateMCode()}>
+                          {importBusy ? t('import.validatingMCode') : t('import.validateMCode')}
+                        </button>
                       </>
                     ) : <p>{t('import.noHeaders')}</p>}
                   </section>
                 ))}
               </div>
+              {importValidation && (
+                <section className="import-row-preview" aria-live="polite" aria-labelledby="import-validation-title">
+                  <h3 id="import-validation-title">{t('import.validationSummary', { scanned: formatLocaleNumber(locale, importValidation.scannedRows), duplicates: formatLocaleNumber(locale, importValidation.duplicateRows) })}</h3>
+                  {importValidation.issues.length > 0 && <ul>{importValidation.issues.map((issue) => <li key={issue.rowNumber}>{t('import.duplicateAtRow', { row: formatLocaleNumber(locale, issue.rowNumber) })}</li>)}</ul>}
+                  <p className="import-preview-note">{t('import.validationNote')}</p>
+                </section>
+              )}
               {rowPreview && (
                 <section className="import-row-preview" aria-live="polite" aria-labelledby="import-row-preview-title">
                   <h3 id="import-row-preview-title">{t('import.rowPreviewTitle', { sheet: rowPreview.name })}</h3>

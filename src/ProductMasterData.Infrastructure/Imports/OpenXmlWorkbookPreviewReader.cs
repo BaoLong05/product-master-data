@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Runtime.InteropServices;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -5,18 +7,188 @@ using ProductMasterData.Application.Imports;
 
 namespace ProductMasterData.Infrastructure.Imports;
 
-public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
+public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWorkbookMCodeScanner
 {
     private const int MaximumWorksheets = 20;
     private const int MaximumColumns = 100;
     private const int MaximumPreviewRows = 10;
+    private const int MaximumMCodeValidationRows = 10_000;
+    private const int MaximumExcelRowNumber = 1_048_576;
     private const long MaximumXmlCharactersPerPart = 1_000_000;
+    private const long MaximumValidationXmlCharactersPerPart = 20_000_000;
+
+    public WorkbookMCodeScan ScanMCode(
+        ReadOnlyMemory<byte> workbookBytes,
+        string worksheetName,
+        int mCodeColumnNumber,
+        CancellationToken cancellationToken)
+    {
+        if (mCodeColumnNumber is < 1 or > MaximumColumns)
+        {
+            throw new InvalidMCodeColumnException();
+        }
+
+        try
+        {
+            using var stream = CreateReadOnlyMemoryStream(workbookBytes);
+            using var workbook = SpreadsheetDocument.Open(stream, false, new OpenSettings
+            {
+                MaxCharactersInPart = MaximumValidationXmlCharactersPerPart
+            });
+            var workbookPart = workbook.WorkbookPart
+                ?? throw new InvalidWorkbookException("The workbook does not contain a workbook part.");
+            var sheets = workbookPart.Workbook?.Sheets?.Elements<Sheet>().ToArray() ?? [];
+            if (sheets.Length is < 1 or > MaximumWorksheets)
+            {
+                throw new InvalidWorkbookException($"The workbook must contain between 1 and {MaximumWorksheets} worksheets.");
+            }
+
+            var sheet = SelectSheets(sheets, worksheetName).Single();
+            if (string.IsNullOrWhiteSpace(sheet.Name?.Value) || string.IsNullOrWhiteSpace(sheet.Id?.Value)
+                || workbookPart.GetPartById(sheet.Id.Value) is not WorksheetPart worksheetPart)
+            {
+                throw new InvalidWorkbookException("The workbook contains an invalid worksheet reference.");
+            }
+
+            var values = new List<RawMCodeValue>();
+            Row? header = null;
+            var scannedRows = 0;
+            var fallbackRowNumber = 1;
+            var previousRowNumber = 0;
+            var headerRowNumber = 0;
+            using (var reader = OpenXmlReader.Create(worksheetPart))
+            {
+                while (reader.Read())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (reader.ElementType != typeof(Row))
+                    {
+                        continue;
+                    }
+
+                    var row = reader.LoadCurrentElement() as Row
+                        ?? throw new InvalidWorkbookException("The workbook contains an invalid worksheet row.");
+                    if (header is null)
+                    {
+                        header = row;
+                        headerRowNumber = GetRowNumber(row, 1);
+                        ValidateExcelRowNumber(headerRowNumber);
+                        var headerCells = row.Elements<Cell>().ToArray();
+                        var headerColumns = headerCells
+                            .Select(cell => GetValidatedCellColumnIndex(cell, headerRowNumber))
+                            .ToArray();
+                        if (headerColumns.Distinct().Count() != headerColumns.Length)
+                        {
+                            throw new InvalidWorkbookException("The worksheet header contains duplicate cell references.");
+                        }
+
+                        var headerColumnCount = headerColumns.DefaultIfEmpty(0).Max();
+                        if (mCodeColumnNumber > headerColumnCount)
+                        {
+                            throw new InvalidMCodeColumnException();
+                        }
+
+                        previousRowNumber = headerRowNumber;
+                        fallbackRowNumber = checked(headerRowNumber + 1);
+                        continue;
+                    }
+
+                    var rowNumber = GetRowNumber(row, fallbackRowNumber);
+                    ValidateExcelRowNumber(rowNumber);
+                    if (rowNumber <= previousRowNumber)
+                    {
+                        throw new InvalidWorkbookException("The worksheet contains duplicate or out-of-order row numbers.");
+                    }
+
+                    scannedRows = checked(rowNumber - headerRowNumber);
+                    if (scannedRows > MaximumMCodeValidationRows)
+                    {
+                        throw new WorkbookRowLimitExceededException();
+                    }
+
+                    previousRowNumber = rowNumber;
+                    fallbackRowNumber = checked(rowNumber + 1);
+                    var rowCells = row.Elements<Cell>().ToArray();
+                    var rowColumns = rowCells
+                        .Select(cell => GetValidatedCellColumnIndex(cell, rowNumber))
+                        .ToArray();
+                    if (rowColumns.Distinct().Count() != rowColumns.Length)
+                    {
+                        throw new InvalidWorkbookException("The worksheet row contains duplicate cell references.");
+                    }
+
+                    var matchingCells = rowCells
+                        .Where((_, index) => rowColumns[index] == mCodeColumnNumber)
+                        .ToArray();
+
+                    if (matchingCells.Length == 0 || matchingCells[0].CellFormula is not null)
+                    {
+                        continue;
+                    }
+
+                    var cell = matchingCells[0];
+                    if (cell.DataType?.Value == CellValues.SharedString)
+                    {
+                        if (!int.TryParse(cell.CellValue?.Text, out var sharedStringIndex) || sharedStringIndex < 0)
+                        {
+                            throw new InvalidWorkbookException("The workbook contains an invalid shared string reference.");
+                        }
+
+                        values.Add(new RawMCodeValue(rowNumber, null, sharedStringIndex));
+                        continue;
+                    }
+
+                    var value = cell.DataType?.Value == CellValues.InlineString
+                        ? cell.InlineString?.InnerText
+                        : cell.CellValue?.Text;
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        values.Add(new RawMCodeValue(rowNumber, value, null));
+                    }
+                }
+            }
+
+            if (header is null)
+            {
+                throw new InvalidWorkbookException("The selected worksheet does not contain a header row.");
+            }
+
+            var rawRows = values.Select(value =>
+            {
+                var references = value.SharedStringIndex is int sharedStringIndex
+                    ? new[] { (SharedStringIndex: sharedStringIndex, ColumnIndex: 0) }
+                    : Array.Empty<(int SharedStringIndex, int ColumnIndex)>();
+                return new RawPreviewRow(
+                    value.RowNumber,
+                    [value.Value],
+                    [],
+                    references);
+            }).ToArray();
+            if (rawRows.Any(row => row.SharedStringReferences.Count > 0))
+            {
+                var sharedStringPart = workbookPart.SharedStringTablePart
+                    ?? throw new InvalidWorkbookException("The workbook is missing its shared string table.");
+                ReadSharedStringValues(sharedStringPart, rawRows, cancellationToken);
+            }
+
+            var resolvedValues = rawRows
+                .Where(row => !string.IsNullOrEmpty(row.Values[0]))
+                .Select(row => new WorkbookMCodeValue(row.RowNumber, row.Values[0]!))
+                .ToArray();
+
+            return new WorkbookMCodeScan(sheet.Name!.Value!, scannedRows, resolvedValues);
+        }
+        catch (Exception exception) when (exception is OpenXmlPackageException or InvalidDataException or ArgumentException or FormatException or OverflowException or System.Xml.XmlException)
+        {
+            throw new InvalidWorkbookException("The uploaded file is not a supported .xlsx workbook.");
+        }
+    }
 
     public WorkbookPreview ReadPreview(ReadOnlyMemory<byte> workbookBytes, string? worksheetName)
     {
         try
         {
-            using var stream = new MemoryStream(workbookBytes.ToArray(), writable: false);
+            using var stream = CreateReadOnlyMemoryStream(workbookBytes);
             using var workbook = SpreadsheetDocument.Open(stream, false, new OpenSettings
             {
                 MaxCharactersInPart = MaximumXmlCharactersPerPart
@@ -185,9 +357,58 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
         return rowIndex is null ? fallbackRowNumber : checked((int)rowIndex.Value);
     }
 
+    private static void ValidateExcelRowNumber(int rowNumber)
+    {
+        if (rowNumber is < 1 or > MaximumExcelRowNumber)
+        {
+            throw new InvalidWorkbookException("The worksheet contains a row outside the supported Excel row range.");
+        }
+    }
+
+    private static int GetValidatedCellColumnIndex(Cell cell, int rowNumber)
+    {
+        var cellReference = cell.CellReference?.Value;
+        if (string.IsNullOrWhiteSpace(cellReference))
+        {
+            throw new InvalidWorkbookException("The workbook contains a cell without a reference.");
+        }
+
+        var columnLength = 0;
+        while (columnLength < cellReference.Length && char.IsAsciiLetter(cellReference[columnLength]))
+        {
+            columnLength++;
+        }
+
+        if (columnLength == 0
+            || !int.TryParse(
+                cellReference.AsSpan(columnLength),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var referencedRow)
+            || referencedRow != rowNumber)
+        {
+            throw new InvalidWorkbookException("The worksheet contains a malformed or mismatched cell reference.");
+        }
+
+        return GetColumnIndex(cellReference);
+    }
+
+    private static MemoryStream CreateReadOnlyMemoryStream(ReadOnlyMemory<byte> workbookBytes)
+    {
+        if (MemoryMarshal.TryGetArray(workbookBytes, out var segment)
+            && segment.Array is not null
+            && segment.Offset == 0)
+        {
+            return new MemoryStream(segment.Array, 0, segment.Count, writable: false, publiclyVisible: false);
+        }
+
+        return new MemoryStream(workbookBytes.ToArray(), writable: false);
+    }
+
     private static void ReadSharedStringValues(
         SharedStringTablePart sharedStringPart,
-        IReadOnlyList<RawPreviewRow> rows)
+        IReadOnlyList<RawPreviewRow> rows,
+        CancellationToken cancellationToken = default)
     {
         var references = rows.SelectMany(row => row.SharedStringReferences.Select(reference =>
             (reference.SharedStringIndex, Row: row, reference.ColumnIndex)));
@@ -198,6 +419,7 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
         var index = -1;
         while (reader.Read() && remaining.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (reader.ElementType != typeof(SharedStringItem))
             {
                 continue;
@@ -220,6 +442,8 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader
             throw new InvalidWorkbookException("The workbook contains a shared string reference outside the supported table.");
         }
     }
+
+    private sealed record RawMCodeValue(int RowNumber, string? Value, int? SharedStringIndex);
 
     private sealed record RawPreviewRow(
         int RowNumber,
