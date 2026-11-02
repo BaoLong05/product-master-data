@@ -11,6 +11,9 @@ const backendCodes = {
   workbook_too_large: 'error.backend.workbookTooLarge',
   unsupported_workbook_type: 'error.backend.unsupportedWorkbookType',
   invalid_workbook: 'error.backend.invalidWorkbook',
+  missing_worksheet: 'error.backend.missingWorksheet',
+  invalid_m_code_column: 'error.backend.invalidMCodeColumn',
+  workbook_row_limit_exceeded: 'error.backend.workbookRowLimitExceeded',
   invalid_pagination: 'error.backend.invalidPagination',
   invalid_query_parameter: 'error.backend.invalidQueryParameter',
   invalid_query_value: 'error.backend.invalidQueryValue',
@@ -27,6 +30,7 @@ describe('backend API error localization', () => {
     const sourceFiles = [
       '../../src/ProductMasterData.Api/Catalog/ProductRecordEndpoints.cs',
       '../../src/ProductMasterData.Api/Imports/ImportPreviewEndpoints.cs',
+      '../../src/ProductMasterData.Api/Imports/ImportValidationEndpoints.cs',
     ]
     const sourceCodes = new Set(sourceFiles.flatMap((path) => {
       const source = readFileSync(resolve(testDirectory, path), 'utf8')
