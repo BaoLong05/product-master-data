@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using ProductMasterData.Application.Imports;
 using ProductMasterData.Domain.Catalog;
 using ProductMasterData.Domain.Identity;
@@ -19,6 +20,45 @@ namespace ProductMasterData.Api.Tests;
 
 public sealed class ImportPreviewEndpointTests
 {
+    [ImportValidationPostgresFact]
+    public async Task PostgreSql_validation_matches_exact_MCodes_including_soft_deleted_records()
+    {
+        var connection = new NpgsqlConnectionStringBuilder(
+            Environment.GetEnvironmentVariable("PRODUCTMASTERDATA_TEST_IMPORT_POSTGRES"));
+        Assert.Equal("import_validation_test", connection.Database);
+        Assert.Equal("127.0.0.1", connection.Host);
+
+        const string userName = "import.validation.postgres.test";
+        const string password = "A-strong-import-validation-postgres-passphrase-2026";
+        using var factory = new LoginApiFactory(postgresConnectionString: connection.ConnectionString);
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            var existingRecord = new ProductRecord { MCode = "EXIST-PG" };
+            existingRecord.SoftDelete();
+            database.ProductRecords.Add(existingRecord);
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbookWithMCodeValues("DUP-PG", "DUP-PG", "EXIST-PG", "exist-pg")), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("1"), "mCodeColumnNumber");
+
+        using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var validation = await response.Content.ReadFromJsonAsync<ImportValidationResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal(4, validation.ScannedRows);
+        Assert.Equal(3, validation.DuplicateRows);
+        Assert.Equal(new[] { 2, 3, 4 }, validation.Issues.Select(issue => issue.RowNumber));
+        Assert.All(validation.Issues, issue => Assert.Equal("duplicate_m_code", issue.Code));
+    }
+
     [Fact]
     public void Workbook_m_code_scanner_propagates_request_cancellation()
     {
@@ -856,5 +896,16 @@ public sealed class ImportPreviewEndpointTests
         database.UserRoles.Add(new IdentityUserRole<Guid> { UserId = user.Id, RoleId = role.Id });
         database.RolePermissions.AddRange(permissionKeys.Select(key => new RolePermission(role.Id, key)));
         await database.SaveChangesAsync();
+    }
+}
+
+public sealed class ImportValidationPostgresFactAttribute : FactAttribute
+{
+    public ImportValidationPostgresFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PRODUCTMASTERDATA_TEST_IMPORT_POSTGRES")))
+        {
+            Skip = "Set PRODUCTMASTERDATA_TEST_IMPORT_POSTGRES to a dedicated disposable PostgreSQL import_validation_test database to run this provider test.";
+        }
     }
 }
