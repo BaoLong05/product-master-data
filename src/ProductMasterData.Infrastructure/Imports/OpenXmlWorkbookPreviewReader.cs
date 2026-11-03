@@ -7,7 +7,7 @@ using ProductMasterData.Application.Imports;
 
 namespace ProductMasterData.Infrastructure.Imports;
 
-public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWorkbookMCodeScanner
+public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWorkbookMCodeScanner, IWorkbookImportReader
 {
     private const int MaximumWorksheets = 20;
     private const int MaximumColumns = 100;
@@ -264,6 +264,124 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWork
             throw new InvalidWorkbookException("The uploaded file is not a supported .xlsx workbook.");
         }
     }
+
+    public WorkbookImportData ReadRows(
+        ReadOnlyMemory<byte> workbookBytes,
+        string worksheetName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var stream = CreateReadOnlyMemoryStream(workbookBytes);
+            using var workbook = SpreadsheetDocument.Open(stream, false, new OpenSettings
+            {
+                MaxCharactersInPart = MaximumValidationXmlCharactersPerPart
+            });
+            var workbookPart = workbook.WorkbookPart
+                ?? throw new InvalidWorkbookException("The workbook does not contain a workbook part.");
+            var sheets = workbookPart.Workbook?.Sheets?.Elements<Sheet>().ToArray() ?? [];
+            if (sheets.Length is < 1 or > MaximumWorksheets)
+            {
+                throw new InvalidWorkbookException($"The workbook must contain between 1 and {MaximumWorksheets} worksheets.");
+            }
+
+            var sheet = SelectSheets(sheets, worksheetName).Single();
+            if (string.IsNullOrWhiteSpace(sheet.Name?.Value) || string.IsNullOrWhiteSpace(sheet.Id?.Value)
+                || workbookPart.GetPartById(sheet.Id.Value) is not WorksheetPart worksheetPart)
+            {
+                throw new InvalidWorkbookException("The workbook contains an invalid worksheet reference.");
+            }
+
+            RawPreviewRow? header = null;
+            var rows = new List<RawPreviewRow>();
+            var previousRowNumber = 0;
+            var fallbackRowNumber = 1;
+            using (var reader = OpenXmlReader.Create(worksheetPart))
+            {
+                while (reader.Read())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (reader.ElementType != typeof(Row))
+                    {
+                        continue;
+                    }
+
+                    var row = reader.LoadCurrentElement() as Row
+                        ?? throw new InvalidWorkbookException("The workbook contains an invalid worksheet row.");
+                    var rowNumber = GetRowNumber(row, fallbackRowNumber);
+                    ValidateExcelRowNumber(rowNumber);
+                    if (rowNumber <= previousRowNumber)
+                    {
+                        throw new InvalidWorkbookException("The worksheet contains duplicate or out-of-order row numbers.");
+                    }
+
+                    var cells = row.Elements<Cell>().ToArray();
+                    var columns = cells.Select(cell => GetValidatedCellColumnIndex(cell, rowNumber)).ToArray();
+                    if (columns.Distinct().Count() != columns.Length)
+                    {
+                        throw new InvalidWorkbookException("The worksheet row contains duplicate cell references.");
+                    }
+
+                    var columnCount = columns.DefaultIfEmpty(0).Max();
+                    if (columnCount > MaximumColumns)
+                    {
+                        throw new InvalidWorkbookException($"The worksheet must not exceed {MaximumColumns} columns.");
+                    }
+
+                    var rawRow = ReadCellValues(row, rowNumber);
+                    if (header is null)
+                    {
+                        header = rawRow;
+                    }
+                    else
+                    {
+                        if (rowNumber - header.RowNumber > MaximumMCodeValidationRows)
+                        {
+                            throw new WorkbookRowLimitExceededException();
+                        }
+
+                        rows.Add(rawRow);
+                    }
+
+                    previousRowNumber = rowNumber;
+                    fallbackRowNumber = checked(rowNumber + 1);
+                }
+            }
+
+            if (header is null)
+            {
+                throw new InvalidWorkbookException("The selected worksheet does not contain a header row.");
+            }
+
+            var headerColumnCount = header.Values.Length;
+            if (rows.Any(row => row.Values.Length > headerColumnCount))
+            {
+                throw new InvalidWorkbookException("The worksheet contains data outside its header columns.");
+            }
+
+            var rawRows = new[] { header }.Concat(rows).ToArray();
+            if (rawRows.Any(row => row.SharedStringReferences.Count > 0))
+            {
+                var sharedStringPart = workbookPart.SharedStringTablePart
+                    ?? throw new InvalidWorkbookException("The workbook is missing its shared string table.");
+                ReadSharedStringValues(sharedStringPart, rawRows, cancellationToken);
+            }
+
+            return new WorkbookImportData(
+                sheet.Name!.Value!,
+                PadValues(header.Values, headerColumnCount),
+                rows.Select(row => new WorkbookImportRow(row.RowNumber, PadValues(row.Values, headerColumnCount))).ToArray());
+        }
+        catch (Exception exception) when (exception is OpenXmlPackageException or InvalidDataException or ArgumentException or FormatException or OverflowException or System.Xml.XmlException)
+        {
+            throw new InvalidWorkbookException("The uploaded file is not a supported .xlsx workbook.");
+        }
+    }
+
+    private static string?[] PadValues(string?[] values, int columnCount) =>
+        values.Length == columnCount
+            ? values
+            : values.Concat(new string?[columnCount - values.Length]).ToArray();
 
     private static Sheet[] SelectSheets(IReadOnlyList<Sheet> sheets, string? worksheetName)
     {

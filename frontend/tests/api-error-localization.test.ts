@@ -19,6 +19,10 @@ const backendCodes = {
   invalid_query_value: 'error.backend.invalidQueryValue',
   record_version_conflict: 'error.backend.recordVersionConflict',
   duplicate_m_code: 'error.backend.duplicateMCode',
+  invalid_column_mapping: 'error.backend.invalidColumnMapping',
+  import_commit_conflict: 'error.backend.importCommitConflict',
+  import_duplicate_conflict: 'error.backend.importDuplicateConflict',
+  invalid_page_size: 'error.backend.invalidPageSize',
 } as const
 
 const locales: Locale[] = ['vi', 'en', 'ko']
@@ -31,6 +35,8 @@ describe('backend API error localization', () => {
       '../../src/ProductMasterData.Api/Catalog/ProductRecordEndpoints.cs',
       '../../src/ProductMasterData.Api/Imports/ImportPreviewEndpoints.cs',
       '../../src/ProductMasterData.Api/Imports/ImportValidationEndpoints.cs',
+      '../../src/ProductMasterData.Api/Imports/ImportCommitEndpoints.cs',
+      '../../src/ProductMasterData.Api/Imports/ImportHistoryEndpoints.cs',
     ]
     const sourceCodes = new Set(sourceFiles.flatMap((path) => {
       const source = readFileSync(resolve(testDirectory, path), 'utf8')

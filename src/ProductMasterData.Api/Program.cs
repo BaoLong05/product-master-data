@@ -84,6 +84,7 @@ builder.Services.AddIdentityCore<ApplicationUser>()
 builder.Services.AddScoped<ActiveUserCookieValidator>();
 builder.Services.AddSingleton<IWorkbookPreviewReader, OpenXmlWorkbookPreviewReader>();
 builder.Services.AddSingleton<IWorkbookMCodeScanner, OpenXmlWorkbookPreviewReader>();
+builder.Services.AddSingleton<IWorkbookImportReader, OpenXmlWorkbookPreviewReader>();
 
 builder.Services
     .AddHealthChecks()
@@ -102,6 +103,8 @@ app.MapProductHealthEndpoints();
 app.MapProductRecordEndpoints();
 app.MapImportPreviewEndpoints();
 app.MapImportValidationEndpoints();
+app.MapImportCommitEndpoints();
+app.MapImportHistoryEndpoints();
 app.MapGet("/api/v1/auth/csrf", (HttpContext httpContext, IAntiforgery antiforgery) =>
 {
     var tokens = antiforgery.GetAndStoreTokens(httpContext);
