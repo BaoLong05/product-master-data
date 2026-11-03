@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using ProductMasterData.Domain.Audit;
 using ProductMasterData.Domain.Catalog;
 using ProductMasterData.Domain.Identity;
+using ProductMasterData.Domain.Imports;
 using ProductMasterData.Infrastructure.Identity;
 
 namespace ProductMasterData.Infrastructure.Persistence;
@@ -14,6 +15,8 @@ public sealed class ProductMasterDataDbContext(DbContextOptions<ProductMasterDat
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<ImportRowIssue> ImportRowIssues => Set<ImportRowIssue>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

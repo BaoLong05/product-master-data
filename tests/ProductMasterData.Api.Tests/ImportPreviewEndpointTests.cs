@@ -60,6 +60,170 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
+    public async Task Authorized_operator_commits_mapped_workbook_rows_and_records_safe_history()
+    {
+        const string userName = "import.commit.success.test";
+        const string password = "A-strong-import-commit-success-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.commit", "imports.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("{\"1\":\"mCode\"}"), "columnMapping");
+
+        using var response = await client.PostAsync("/api/v1/imports/commit", content);
+        var result = await response.Content.ReadFromJsonAsync<ImportCommitResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ImportedRows);
+        Assert.Equal(0, result.SkippedRows);
+        Assert.False(result.Replayed);
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal("1", (await database.ProductRecords.SingleAsync()).MCode);
+    }
+
+    [Fact]
+    public async Task Identical_import_replay_returns_original_batch_without_repeating_side_effects()
+    {
+        const string userName = "import.commit.replay.test";
+        const string password = "A-strong-import-commit-replay-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.commit", "imports.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        var workbook = CreateWorkbook(("DATA", ["M.CODE"], 1));
+
+        async Task<HttpResponseMessage> CommitAsync()
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new ByteArrayContent(workbook), "file", "products.xlsx");
+            content.Add(new StringContent("DATA"), "worksheetName");
+            content.Add(new StringContent("{\"1\":\"mCode\"}"), "columnMapping");
+            return await client.PostAsync("/api/v1/imports/commit", content);
+        }
+
+        using var firstResponse = await CommitAsync();
+        using var firstResult = await firstResponse.Content.ReadFromJsonAsync<JsonDocument>();
+        using var replayResponse = await CommitAsync();
+        using var replayResult = await replayResponse.Content.ReadFromJsonAsync<JsonDocument>();
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, replayResponse.StatusCode);
+        Assert.Equal(firstResult!.RootElement.GetProperty("batchId").GetGuid(), replayResult!.RootElement.GetProperty("batchId").GetGuid());
+        Assert.True(replayResult.RootElement.GetProperty("replayed").GetBoolean());
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal(1, await database.ProductRecords.CountAsync());
+        Assert.Equal(1, await database.ImportBatches.CountAsync());
+        Assert.Equal(1, await database.AuditEvents.CountAsync(item => item.Action == "imports.committed"));
+    }
+
+    [Fact]
+    public async Task Commit_requires_import_permission_and_antiforgery_before_writing()
+    {
+        const string userName = "import.commit.security.test";
+        const string password = "A-strong-import-commit-security-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using (var deniedContent = new MultipartFormDataContent())
+        {
+            deniedContent.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+            deniedContent.Add(new StringContent("DATA"), "worksheetName");
+            deniedContent.Add(new StringContent("{\"1\":\"mCode\"}"), "columnMapping");
+            using var denied = await client.PostAsync("/api/v1/imports/commit", deniedContent);
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+
+        await GrantPermissionsAsync(factory, userName, "imports.commit");
+        await AddAntiforgeryTokenAsync(client);
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+        using (var csrfContent = new MultipartFormDataContent())
+        {
+            csrfContent.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 1))), "file", "products.xlsx");
+            csrfContent.Add(new StringContent("DATA"), "worksheetName");
+            csrfContent.Add(new StringContent("{\"1\":\"mCode\"}"), "columnMapping");
+            using var rejected = await client.PostAsync("/api/v1/imports/commit", csrfContent);
+            var error = await rejected.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+            Assert.Equal("invalid_antiforgery_token", error?.Code);
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Empty(await database.ProductRecords.ToListAsync());
+        Assert.Empty(await database.ImportBatches.ToListAsync());
+        Assert.Empty(await database.AuditEvents.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Import_history_lists_batches_and_returns_safe_row_detail()
+    {
+        const string userName = "import.history.success.test";
+        const string password = "A-strong-import-history-success-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.commit", "imports.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbookWithMCodeValues("history-private-key")), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("{\"1\":\"mCode\"}"), "columnMapping");
+        using var commit = await client.PostAsync("/api/v1/imports/commit", content);
+        using var committed = await commit.Content.ReadFromJsonAsync<JsonDocument>();
+        var batchId = committed!.RootElement.GetProperty("batchId").GetGuid();
+
+        using var list = await client.GetAsync("/api/v1/imports/history");
+        using var history = await list.Content.ReadFromJsonAsync<JsonDocument>();
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Equal(batchId, history!.RootElement.GetProperty("batches")[0].GetProperty("batchId").GetGuid());
+        using var detail = await client.GetAsync($"/api/v1/imports/history/{batchId:D}");
+        using var batch = await detail.Content.ReadFromJsonAsync<JsonDocument>();
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        Assert.Equal(1, batch!.RootElement.GetProperty("importedRows").GetInt32());
+        Assert.Empty(batch.RootElement.GetProperty("issues").EnumerateArray());
+        Assert.DoesNotContain("history-private-key", await detail.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Import_skips_existing_and_repeated_codes_without_exposing_values()
+    {
+        const string userName = "import.commit.duplicates.test";
+        const string password = "A-strong-import-commit-duplicates-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.commit");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            database.ProductRecords.Add(new ProductRecord { MCode = "EXIST" });
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbookWithMCodeValues("EXIST", "REPEAT", "REPEAT", null)), "file", "duplicates.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("{\"1\":\"mCode\"}"), "columnMapping");
+
+        using var response = await client.PostAsync("/api/v1/imports/commit", content);
+        var result = await response.Content.ReadFromJsonAsync<ImportCommitResponse>();
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(result);
+        Assert.Equal(4, result.ScannedRows);
+        Assert.Equal(1, result.ImportedRows);
+        Assert.Equal(3, result.SkippedRows);
+        Assert.Equal(new[] { 2, 3, 4 }, result.Issues.Select(issue => issue.RowNumber));
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("EXIST", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("REPEAT", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Workbook_m_code_scanner_propagates_request_cancellation()
     {
         var scanner = new OpenXmlWorkbookPreviewReader();
@@ -700,6 +864,7 @@ public sealed class ImportPreviewEndpointTests
     private sealed record ImportPreviewErrorResponse(string Code, string Message);
     private sealed record ImportValidationResponse(string WorksheetName, int ScannedRows, int DuplicateRows, IReadOnlyList<ImportValidationIssue> Issues);
     private sealed record ImportValidationIssue(int RowNumber, string Code);
+    private sealed record ImportCommitResponse(Guid BatchId, int ScannedRows, int ImportedRows, int SkippedRows, bool Replayed, IReadOnlyList<ImportValidationIssue> Issues);
     private sealed record CsrfTokenResponse(string? RequestToken);
     private sealed record LoginRequest(string UserName, string Password);
 
@@ -776,7 +941,7 @@ public sealed class ImportPreviewEndpointTests
         return stream.ToArray();
     }
 
-    private static byte[] CreateWorkbookWithMCodeValues(params string?[] mCodeValues)
+    internal static byte[] CreateWorkbookWithMCodeValues(params string?[] mCodeValues)
     {
         var baseWorkbook = CreateWorkbook(("DATA", ["M.CODE"], mCodeValues.Length));
         using var sourceStream = new MemoryStream(baseWorkbook);

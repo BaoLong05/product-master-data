@@ -477,6 +477,95 @@ namespace ProductMasterData.Infrastructure.Persistence.Migrations
                     b.ToTable("role_permissions", (string)null);
                 });
 
+            modelBuilder.Entity("ProductMasterData.Domain.Imports.ImportBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<int>("ImportedRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("imported_rows");
+
+                    b.Property<Guid>("InitiatingUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("initiating_user_id");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<int>("ScannedRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("scanned_rows");
+
+                    b.Property<int>("SkippedRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("skipped_rows");
+
+                    b.Property<string>("SourceFileName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source_file_name");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt")
+                        .IsDescending()
+                        .HasDatabaseName("ix_import_batches_started_at");
+
+                    b.HasIndex("InitiatingUserId", "RequestFingerprint")
+                        .IsUnique()
+                        .HasDatabaseName("ux_import_batches_actor_fingerprint");
+
+                    b.ToTable("import_batches", (string)null);
+                });
+
+            modelBuilder.Entity("ProductMasterData.Domain.Imports.ImportRowIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("batch_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("error_code");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("source_row_number");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId", "RowNumber", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ux_import_row_errors_batch_row_code");
+
+                    b.ToTable("import_row_errors", (string)null);
+                });
+
             modelBuilder.Entity("ProductMasterData.Infrastructure.Identity.ApplicationRole", b =>
                 {
                     b.Property<Guid>("Id")
@@ -652,6 +741,31 @@ namespace ProductMasterData.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ProductMasterData.Domain.Imports.ImportBatch", b =>
+                {
+                    b.HasOne("ProductMasterData.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("InitiatingUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_batches_initiating_user_id");
+                });
+
+            modelBuilder.Entity("ProductMasterData.Domain.Imports.ImportRowIssue", b =>
+                {
+                    b.HasOne("ProductMasterData.Domain.Imports.ImportBatch", null)
+                        .WithMany("Issues")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_row_issues_batch_id");
+                });
+
+            modelBuilder.Entity("ProductMasterData.Domain.Imports.ImportBatch", b =>
+                {
+                    b.Navigation("Issues");
                 });
 #pragma warning restore 612, 618
         }

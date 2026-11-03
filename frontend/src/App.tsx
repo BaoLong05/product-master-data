@@ -4,6 +4,8 @@ import { ImportColumnMapping as ImportColumnMappingView } from './import-column-
 import { updateImportColumnMapping, type ImportColumnMapping, type ImportPreviewRow } from './import-column-mapping'
 import { ImportHeaderDiagnostics } from './import-header-diagnostics'
 import { createImportPreviewRequest, createImportValidationRequest } from './import-preview'
+import { createImportCommitRequest, createImportHistoryRequest, importHistoryItemUrl, importHistoryUrl, type ImportBatchDetail, type ImportCommitResult, type ImportHistoryItem } from './import-commit'
+import { ImportCommitSummary, ImportHistoryView } from './import-commit-view'
 import { loadRecordAudit, type ProductRecordAuditEvent } from './record-audit'
 import { RecordAuditHistory } from './record-audit-view'
 import { AppPreferencesProvider } from './app-preferences'
@@ -162,8 +164,17 @@ function AppContent() {
   const [importError, setImportError] = useState('')
   const [importBusy, setImportBusy] = useState(false)
   const [importValidation, setImportValidation] = useState<ImportValidation | null>(null)
+  const [importCommitResult, setImportCommitResult] = useState<ImportCommitResult | null>(null)
+  const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([])
+  const [importHistoryLoading, setImportHistoryLoading] = useState(false)
+  const [importHistoryDetailLoading, setImportHistoryDetailLoading] = useState(false)
+  const [importHistoryError, setImportHistoryError] = useState('')
+  const [selectedImportBatchId, setSelectedImportBatchId] = useState<string | null>(null)
+  const [selectedImportBatch, setSelectedImportBatch] = useState<ImportBatchDetail | null>(null)
   const [auditPanel, setAuditPanel] = useState<RecordAuditPanelState | null>(null)
   const auditRequestGeneration = useRef(0)
+  const importHistoryListGeneration = useRef(0)
+  const importHistoryDetailGeneration = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -293,6 +304,83 @@ function AppContent() {
       setImportBusy(false)
     }
   }
+
+  const loadImportHistory = async () => {
+    const generation = ++importHistoryListGeneration.current
+    setImportHistoryLoading(true)
+    setImportHistoryError('')
+    try {
+      const response = await fetch(importHistoryUrl(), createImportHistoryRequest())
+      if (!response.ok) throw new Error(await responseMessage(response, t))
+      const result = await response.json() as { batches: ImportHistoryItem[] }
+      if (generation === importHistoryListGeneration.current) setImportHistory(result.batches)
+    } catch (error) {
+      if (generation === importHistoryListGeneration.current) setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+    } finally {
+      if (generation === importHistoryListGeneration.current) setImportHistoryLoading(false)
+    }
+  }
+
+  const handleCommitImport = async () => {
+    if (!importFile || !selectedWorksheetName || !rowPreview || !Object.keys(importColumnMapping).length) return
+    if (!window.confirm(t('import.confirmCommit', { file: importFile.name }))) return
+    setImportError('')
+    setImportBusy(true)
+    try {
+      const token = await requestAntiforgeryToken(t)
+      const response = await fetch('/api/v1/imports/commit', createImportCommitRequest(importFile, token, selectedWorksheetName, importColumnMapping))
+      if (!response.ok) throw new Error(await responseMessage(response, t))
+      setImportCommitResult(await response.json() as ImportCommitResult)
+      setListVersion((version) => version + 1)
+      await loadImportHistory()
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : t('error.importRead'))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  const handleSelectImportBatch = async (batchId: string) => {
+    const generation = ++importHistoryDetailGeneration.current
+    setSelectedImportBatchId(batchId)
+    setImportHistoryDetailLoading(true)
+    setImportHistoryError('')
+    try {
+      const response = await fetch(importHistoryItemUrl(batchId), createImportHistoryRequest())
+      if (!response.ok) throw new Error(await responseMessage(response, t))
+      const detail = await response.json() as ImportBatchDetail
+      if (generation === importHistoryDetailGeneration.current) setSelectedImportBatch(detail)
+    } catch (error) {
+      if (generation === importHistoryDetailGeneration.current) setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+    } finally {
+      if (generation === importHistoryDetailGeneration.current) setImportHistoryDetailLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!identity) return
+    let active = true
+    const generation = ++importHistoryListGeneration.current
+    const load = async () => {
+      try {
+        const response = await fetch(importHistoryUrl(), createImportHistoryRequest())
+        if (!response.ok) throw new Error(await responseMessage(response, t))
+        const result = await response.json() as { batches: ImportHistoryItem[] }
+        if (active && generation === importHistoryListGeneration.current) {
+          setImportHistory(result.batches)
+          setImportHistoryError('')
+        }
+      } catch (error) {
+        if (active && generation === importHistoryListGeneration.current) {
+          setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+        }
+      } finally {
+        if (active && generation === importHistoryListGeneration.current) setImportHistoryLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [identity, t])
 
   const closeAuditPanel = () => {
     auditRequestGeneration.current += 1
@@ -654,9 +742,28 @@ function AppContent() {
                   ) : <p>{t('import.noRowsAfterHeader')}</p>}
                 </section>
               )}
+              {rowPreview && Object.keys(importColumnMapping).length > 0 && (
+                <button className="button button-primary" type="button" disabled={importBusy} onClick={() => void handleCommitImport()}>
+                  {importBusy ? t('import.commitBusy') : t('import.commitAction')}
+                </button>
+              )}
+              {importCommitResult && <ImportCommitSummary result={importCommitResult} locale={locale} t={t} />}
             </>
           )}
         </section>
+
+        <ImportHistoryView
+          items={importHistory}
+          selectedBatchId={selectedImportBatchId}
+          selectedDetail={selectedImportBatch}
+          loading={importHistoryLoading}
+          detailLoading={importHistoryDetailLoading}
+          error={importHistoryError}
+          locale={locale}
+          t={t}
+          onRefresh={() => void loadImportHistory()}
+          onSelect={(batchId) => void handleSelectImportBatch(batchId)}
+        />
 
         <section className="catalog-card" aria-labelledby="records-title">
           <div className="catalog-toolbar">

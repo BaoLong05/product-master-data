@@ -149,6 +149,27 @@ const vi = {
   'import.validationSummary': 'Đã kiểm tra {scanned} dòng · {duplicates} dòng trùng M.CODE',
   'import.duplicateAtRow': 'M.CODE trùng tại dòng Excel {row}',
   'import.validationNote': 'Chỉ kiểm tra M.CODE trùng; chưa xác thực đầy đủ hoặc nhập dữ liệu.',
+  'import.commitTitle': 'Kết quả nhập Excel',
+  'import.commitSummary': 'Đã nhập {imported} / {scanned} dòng · Bỏ qua {skipped} dòng',
+  'import.commitFile': 'Tệp: {file}',
+  'import.commitReplay': 'Yêu cầu trùng lặp — đã trả lại kết quả của lần nhập trước',
+  'import.commitAction': 'Xác nhận nhập các dòng đã ánh xạ',
+  'import.commitBusy': 'Đang nhập…',
+  'import.confirmCommit': 'Nhập các dòng trong {file}? Tối đa 10.000 dòng dữ liệu sẽ được quét. M.CODE trùng sẽ bị bỏ qua; dữ liệu hiện có không bị ghi đè.',
+  'import.mappingRequired': 'Hãy ánh xạ ít nhất một cột trước khi nhập.',
+  'import.historyTitle': 'Lịch sử nhập Excel',
+  'import.historyRefresh': 'Tải lịch sử',
+  'import.historyRefreshing': 'Đang tải…',
+  'import.historyLoading': 'Đang tải lịch sử nhập…',
+  'import.historyEmpty': 'Chưa có lần nhập nào.',
+  'import.historyPermissionHint': 'API kiểm tra quyền imports.read để xem lịch sử; giao diện không tự giả định quyền.',
+  'import.historySelect': 'Xem chi tiết lần nhập tệp {file}',
+  'import.historyDetail': 'Chi tiết lần nhập: {file}',
+  'import.unknownIssue': 'Dòng Excel {row}: không thể nhập dòng này.',
+  'error.backend.invalidColumnMapping': 'Ánh xạ cột không hợp lệ. Hãy kiểm tra ánh xạ rồi thử lại.',
+  'error.backend.importCommitConflict': 'Không thể hoàn tất an toàn lần nhập. Hãy gửi lại cùng workbook để nhận kết quả trước đó.',
+  'error.backend.importDuplicateConflict': 'M.CODE vừa được tạo trong lúc nhập. Không có dòng nào được ghi; hãy chạy lại để xem các dòng trùng.',
+  'error.backend.invalidPageSize': 'Số lượng mục lịch sử phải từ 1 đến 100.',
   'catalog.title': 'Tất cả hồ sơ',
   'catalog.totalCount': '{count} hồ sơ',
   'catalog.loading': 'Đang tải danh mục…',
@@ -217,7 +238,9 @@ const en: Record<MessageKey, string> = {
   'catalog.title': 'All records', 'catalog.totalCount': '{count} records', 'catalog.loading': 'Loading catalog…', 'catalog.page': 'Page {page}/{total}', 'catalog.searchLabel': 'Search all data fields', 'catalog.searchPlaceholder': 'Search across 27 data fields…', 'catalog.filter': 'Filters', 'catalog.search': 'Search', 'catalog.searchHint': 'Search is case-insensitive; each field can also be filtered separately.', 'catalog.clearFilters': 'Clear filters', 'catalog.applyFilters': 'Apply filters', 'catalog.tableCaption': 'Product record list', 'catalog.columnCompany': 'Company', 'catalog.columnStatus': 'Status', 'catalog.columnUpdated': 'Updated', 'catalog.rowActions': 'Actions', 'catalog.noName': 'Unnamed', 'catalog.noStatus': 'Not updated', 'catalog.edit': 'Edit', 'catalog.delete': 'Delete', 'catalog.audit': 'History', 'catalog.hideAudit': 'Hide', 'catalog.showAudit': 'View', 'catalog.noMatches': 'No matching records found', 'catalog.emptyTitle': 'Your catalog is empty', 'catalog.emptySearch': 'Try changing your search term or filters.', 'catalog.emptyCatalog': 'Create your first record to start managing the product catalog.', 'catalog.clearSearch': 'Clear search and filters', 'catalog.loadingRecords': 'Loading records…', 'catalog.showing': 'Showing {shown}/{total}', 'catalog.previous': 'Previous', 'catalog.next': 'Next',
   'audit.eyebrow': 'RECORD HISTORY', 'audit.title': 'Audit history — {record}', 'audit.close': 'Close audit history', 'audit.permission': 'The API checks the audit.read permission; access is not assumed by the UI.', 'audit.loading': 'Loading audit history…', 'audit.empty': 'There are no audit events for this record.', 'audit.actionCreated': 'Record created', 'audit.actionUpdated': 'Record updated', 'audit.actionDeleted': 'Record soft-deleted', 'audit.succeeded': 'Succeeded', 'audit.failed': 'Failed', 'audit.actor': 'Actor', 'audit.system': 'System', 'audit.correlation': 'Correlation ID', 'audit.target': 'Target', 'audit.metadata': 'Safe metadata',
   'audit.noPermission': 'Your account does not have the audit.read permission.', 'audit.invalidResponse': 'The audit history response has an invalid format.',
-  'import.validateMCode': 'Check duplicate M.CODE values', 'import.validatingMCode': 'Checking M.CODE…', 'import.validationSummary': 'Checked {scanned} rows · {duplicates} duplicate M.CODE rows', 'import.duplicateAtRow': 'Duplicate M.CODE at Excel row {row}', 'import.validationNote': 'This checks duplicate M.CODE values only; it does not perform full validation or import data.',
+  'import.validateMCode': 'Check duplicate M.CODE values', 'import.validatingMCode': 'Checking M.CODE…', 'import.validationSummary': 'Checked {scanned} rows · {duplicates} duplicate M.CODE rows', 'import.duplicateAtRow': 'Duplicate M.CODE at Excel row {row}', 'import.validationNote': 'This checks duplicate M.CODE values only; it does not write records.',
+  'import.commitTitle': 'Excel import results', 'import.commitSummary': 'Imported {imported} / {scanned} rows · Skipped {skipped}', 'import.commitFile': 'File: {file}', 'import.commitReplay': 'Duplicate request — returned the result of the earlier import', 'import.commitAction': 'Confirm import of mapped rows', 'import.commitBusy': 'Importing…', 'import.confirmCommit': 'Import rows from {file}? Up to 10,000 data rows will be scanned. Duplicate M.CODE rows will be skipped; existing records will not be overwritten.', 'import.mappingRequired': 'Map at least one source column before importing.', 'import.historyTitle': 'Excel import history', 'import.historyRefresh': 'Refresh history', 'import.historyRefreshing': 'Loading…', 'import.historyLoading': 'Loading import history…', 'import.historyEmpty': 'No imports yet.', 'import.historyPermissionHint': 'The API checks imports.read for history access; the UI does not assume permission.', 'import.historySelect': 'View import details for {file}', 'import.historyDetail': 'Import details: {file}', 'import.unknownIssue': 'Excel row {row}: this row could not be imported.',
+  'error.backend.invalidColumnMapping': 'The column mapping is invalid. Review the mapping and try again.', 'error.backend.importCommitConflict': 'The import could not be completed safely. Retry the same workbook to retrieve the earlier result.', 'error.backend.importDuplicateConflict': 'An M.CODE was created while the import was running. No rows were written; retry to review duplicates.', 'error.backend.invalidPageSize': 'The history page size must be between 1 and 100.',
 }
 
 const ko: Record<MessageKey, string> = {
@@ -232,7 +255,9 @@ const ko: Record<MessageKey, string> = {
   'catalog.title': '전체 레코드', 'catalog.totalCount': '레코드 {count}개', 'catalog.loading': '카탈로그 불러오는 중…', 'catalog.page': '{page}/{total}페이지', 'catalog.searchLabel': '모든 데이터 필드 검색', 'catalog.searchPlaceholder': '데이터 필드 27개에서 검색…', 'catalog.filter': '필터', 'catalog.search': '검색', 'catalog.searchHint': '대소문자를 구분하지 않으며 각 필드를 따로 필터링할 수 있습니다.', 'catalog.clearFilters': '필터 지우기', 'catalog.applyFilters': '필터 적용', 'catalog.tableCaption': '제품 레코드 목록', 'catalog.columnCompany': '회사', 'catalog.columnStatus': '상태', 'catalog.columnUpdated': '수정일', 'catalog.rowActions': '작업', 'catalog.noName': '이름 없음', 'catalog.noStatus': '업데이트되지 않음', 'catalog.edit': '편집', 'catalog.delete': '삭제', 'catalog.audit': '기록', 'catalog.hideAudit': '숨기기', 'catalog.showAudit': '보기', 'catalog.noMatches': '일치하는 레코드가 없습니다', 'catalog.emptyTitle': '카탈로그가 비어 있습니다', 'catalog.emptySearch': '검색어 또는 필터를 변경해 보세요.', 'catalog.emptyCatalog': '첫 레코드를 만들어 제품 카탈로그 관리를 시작하세요.', 'catalog.clearSearch': '검색 및 필터 지우기', 'catalog.loadingRecords': '레코드 불러오는 중…', 'catalog.showing': '{shown}/{total}개 표시 중', 'catalog.previous': '이전', 'catalog.next': '다음',
   'audit.eyebrow': '레코드 기록', 'audit.title': '감사 기록 — {record}', 'audit.close': '감사 기록 닫기', 'audit.permission': 'API가 audit.read 권한을 확인하며, UI는 접근 권한을 임의로 가정하지 않습니다.', 'audit.loading': '감사 기록 불러오는 중…', 'audit.empty': '이 레코드의 감사 이벤트가 없습니다.', 'audit.actionCreated': '레코드 생성', 'audit.actionUpdated': '레코드 수정', 'audit.actionDeleted': '레코드 소프트 삭제', 'audit.succeeded': '성공', 'audit.failed': '실패', 'audit.actor': '수행자', 'audit.system': '시스템', 'audit.correlation': '상관관계 ID', 'audit.target': '대상', 'audit.metadata': '안전한 메타데이터',
   'audit.noPermission': 'audit.read 권한이 없습니다.', 'audit.invalidResponse': '감사 기록 응답 형식이 올바르지 않습니다.',
-  'import.validateMCode': '중복 M.CODE 확인', 'import.validatingMCode': 'M.CODE 확인 중…', 'import.validationSummary': '{scanned}개 행 확인 · 중복 M.CODE {duplicates}개 행', 'import.duplicateAtRow': 'Excel {row}행에서 중복 M.CODE 발견', 'import.validationNote': '중복 M.CODE만 확인하며 전체 검증이나 데이터 가져오기는 수행하지 않습니다.',
+  'import.validateMCode': '중복 M.CODE 확인', 'import.validatingMCode': 'M.CODE 확인 중…', 'import.validationSummary': '{scanned}개 행 확인 · 중복 M.CODE {duplicates}개 행', 'import.duplicateAtRow': 'Excel {row}행에서 중복 M.CODE 발견', 'import.validationNote': '중복 M.CODE만 확인하며 레코드는 저장하지 않습니다.',
+  'import.commitTitle': 'Excel 가져오기 결과', 'import.commitSummary': '{scanned}개 중 {imported}개 행 가져옴 · {skipped}개 건너뜀', 'import.commitFile': '파일: {file}', 'import.commitReplay': '중복 요청 — 이전 가져오기 결과를 반환했습니다', 'import.commitAction': '매핑된 행 가져오기 확인', 'import.commitBusy': '가져오는 중…', 'import.confirmCommit': '{file}의 행을 가져올까요? 최대 10,000개의 데이터 행을 확인합니다. 중복 M.CODE 행은 건너뛰며 기존 레코드는 덮어쓰지 않습니다.', 'import.mappingRequired': '가져오기 전에 원본 열을 하나 이상 매핑하세요.', 'import.historyTitle': 'Excel 가져오기 기록', 'import.historyRefresh': '기록 새로고침', 'import.historyRefreshing': '불러오는 중…', 'import.historyLoading': '가져오기 기록 불러오는 중…', 'import.historyEmpty': '가져오기 기록이 없습니다.', 'import.historyPermissionHint': '기록 열람 시 API가 imports.read 권한을 확인하며, UI는 권한을 임의로 가정하지 않습니다.', 'import.historySelect': '{file} 가져오기 상세 보기', 'import.historyDetail': '가져오기 상세: {file}', 'import.unknownIssue': 'Excel {row}행: 이 행을 가져올 수 없습니다.',
+  'error.backend.invalidColumnMapping': '열 매핑이 올바르지 않습니다. 매핑을 확인하고 다시 시도하세요.', 'error.backend.importCommitConflict': '가져오기를 안전하게 완료하지 못했습니다. 같은 파일을 다시 보내 이전 결과를 확인하세요.', 'error.backend.importDuplicateConflict': '가져오기 중 M.CODE가 새로 생성되었습니다. 저장된 행은 없으며 다시 실행해 중복 행을 확인하세요.', 'error.backend.invalidPageSize': '기록 페이지 크기는 1에서 100 사이여야 합니다.',
 }
 
 export type { MessageKey }
@@ -255,6 +280,10 @@ const backendErrorMessageKeys = {
   invalid_query_value: 'error.backend.invalidQueryValue',
   record_version_conflict: 'error.backend.recordVersionConflict',
   duplicate_m_code: 'error.backend.duplicateMCode',
+  invalid_column_mapping: 'error.backend.invalidColumnMapping',
+  import_commit_conflict: 'error.backend.importCommitConflict',
+  import_duplicate_conflict: 'error.backend.importDuplicateConflict',
+  invalid_page_size: 'error.backend.invalidPageSize',
 } as const satisfies Record<string, MessageKey>
 
 export function getBackendErrorMessageKey(code: unknown): MessageKey | undefined {
