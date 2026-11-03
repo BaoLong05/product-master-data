@@ -175,6 +175,7 @@ function AppContent() {
   const auditRequestGeneration = useRef(0)
   const importHistoryListGeneration = useRef(0)
   const importHistoryDetailGeneration = useRef(0)
+  const importSessionGeneration = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -242,6 +243,7 @@ function AppContent() {
   }
 
   const requestImportPreview = async (worksheetName?: string) => {
+    const sessionGeneration = importSessionGeneration.current
     setImportError('')
     if (!importFile) {
       setImportError(t('error.importPick'))
@@ -254,6 +256,7 @@ function AppContent() {
       const response = await fetch('/api/v1/imports/preview', createImportPreviewRequest(importFile, token, worksheetName))
       if (!response.ok) throw new Error(await responseMessage(response, t))
       const preview = await response.json() as ImportPreview
+      if (sessionGeneration !== importSessionGeneration.current) return
       if (worksheetName === undefined) {
         setImportPreview(preview)
         setSelectedWorksheetName(preview.worksheets[0]?.name ?? '')
@@ -262,9 +265,11 @@ function AppContent() {
         setRowPreview(preview.worksheets[0] ?? null)
       }
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : t('error.importRead'))
+      if (sessionGeneration === importSessionGeneration.current) {
+        setImportError(error instanceof Error ? error.message : t('error.importRead'))
+      }
     } finally {
-      setImportBusy(false)
+      if (sessionGeneration === importSessionGeneration.current) setImportBusy(false)
     }
   }
 
@@ -290,6 +295,7 @@ function AppContent() {
     const mappedColumn = Object.entries(importColumnMapping).find(([, target]) => target === 'mCode')
     const columnNumber = Number(mappedColumn?.[0])
     if (!importFile || !selectedWorksheetName || !Number.isInteger(columnNumber) || columnNumber < 1) return
+    const sessionGeneration = importSessionGeneration.current
     setImportError('')
     setImportValidation(null)
     setImportBusy(true)
@@ -297,15 +303,19 @@ function AppContent() {
       const token = await requestAntiforgeryToken(t)
       const response = await fetch('/api/v1/imports/validate', createImportValidationRequest(importFile, token, selectedWorksheetName, columnNumber))
       if (!response.ok) throw new Error(await responseMessage(response, t))
-      setImportValidation(await response.json() as ImportValidation)
+      const validation = await response.json() as ImportValidation
+      if (sessionGeneration === importSessionGeneration.current) setImportValidation(validation)
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : t('error.importRead'))
+      if (sessionGeneration === importSessionGeneration.current) {
+        setImportError(error instanceof Error ? error.message : t('error.importRead'))
+      }
     } finally {
-      setImportBusy(false)
+      if (sessionGeneration === importSessionGeneration.current) setImportBusy(false)
     }
   }
 
   const loadImportHistory = async () => {
+    const sessionGeneration = importSessionGeneration.current
     const generation = ++importHistoryListGeneration.current
     setImportHistoryLoading(true)
     setImportHistoryError('')
@@ -313,34 +323,45 @@ function AppContent() {
       const response = await fetch(importHistoryUrl(), createImportHistoryRequest())
       if (!response.ok) throw new Error(await responseMessage(response, t))
       const result = await response.json() as { batches: ImportHistoryItem[] }
-      if (generation === importHistoryListGeneration.current) setImportHistory(result.batches)
+      if (sessionGeneration === importSessionGeneration.current
+        && generation === importHistoryListGeneration.current) setImportHistory(result.batches)
     } catch (error) {
-      if (generation === importHistoryListGeneration.current) setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+      if (sessionGeneration === importSessionGeneration.current
+        && generation === importHistoryListGeneration.current) {
+        setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+      }
     } finally {
-      if (generation === importHistoryListGeneration.current) setImportHistoryLoading(false)
+      if (sessionGeneration === importSessionGeneration.current
+        && generation === importHistoryListGeneration.current) setImportHistoryLoading(false)
     }
   }
 
   const handleCommitImport = async () => {
     if (!importFile || !selectedWorksheetName || !rowPreview || !Object.keys(importColumnMapping).length) return
     if (!window.confirm(t('import.confirmCommit', { file: importFile.name }))) return
+    const sessionGeneration = importSessionGeneration.current
     setImportError('')
     setImportBusy(true)
     try {
       const token = await requestAntiforgeryToken(t)
       const response = await fetch('/api/v1/imports/commit', createImportCommitRequest(importFile, token, selectedWorksheetName, importColumnMapping))
       if (!response.ok) throw new Error(await responseMessage(response, t))
-      setImportCommitResult(await response.json() as ImportCommitResult)
+      const result = await response.json() as ImportCommitResult
+      if (sessionGeneration !== importSessionGeneration.current) return
+      setImportCommitResult(result)
       setListVersion((version) => version + 1)
       await loadImportHistory()
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : t('error.importRead'))
+      if (sessionGeneration === importSessionGeneration.current) {
+        setImportError(error instanceof Error ? error.message : t('error.importRead'))
+      }
     } finally {
-      setImportBusy(false)
+      if (sessionGeneration === importSessionGeneration.current) setImportBusy(false)
     }
   }
 
   const handleSelectImportBatch = async (batchId: string) => {
+    const sessionGeneration = importSessionGeneration.current
     const generation = ++importHistoryDetailGeneration.current
     setSelectedImportBatchId(batchId)
     setImportHistoryDetailLoading(true)
@@ -349,11 +370,16 @@ function AppContent() {
       const response = await fetch(importHistoryItemUrl(batchId), createImportHistoryRequest())
       if (!response.ok) throw new Error(await responseMessage(response, t))
       const detail = await response.json() as ImportBatchDetail
-      if (generation === importHistoryDetailGeneration.current) setSelectedImportBatch(detail)
+      if (sessionGeneration === importSessionGeneration.current
+        && generation === importHistoryDetailGeneration.current) setSelectedImportBatch(detail)
     } catch (error) {
-      if (generation === importHistoryDetailGeneration.current) setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+      if (sessionGeneration === importSessionGeneration.current
+        && generation === importHistoryDetailGeneration.current) {
+        setImportHistoryError(error instanceof Error ? error.message : t('error.importRead'))
+      }
     } finally {
-      if (generation === importHistoryDetailGeneration.current) setImportHistoryDetailLoading(false)
+      if (sessionGeneration === importSessionGeneration.current
+        && generation === importHistoryDetailGeneration.current) setImportHistoryDetailLoading(false)
     }
   }
 
@@ -447,6 +473,24 @@ function AppContent() {
         headers: { 'X-CSRF-TOKEN': requestToken },
       })
       if (!response.ok) throw new Error(await responseMessage(response, t))
+      importSessionGeneration.current += 1
+      importHistoryListGeneration.current += 1
+      importHistoryDetailGeneration.current += 1
+      setImportFile(null)
+      setImportPreview(null)
+      setSelectedWorksheetName('')
+      setRowPreview(null)
+      setImportColumnMapping({})
+      setImportError('')
+      setImportBusy(false)
+      setImportValidation(null)
+      setImportCommitResult(null)
+      setImportHistory([])
+      setImportHistoryLoading(false)
+      setImportHistoryDetailLoading(false)
+      setImportHistoryError('')
+      setSelectedImportBatchId(null)
+      setSelectedImportBatch(null)
       setIdentity(null)
       setRecordPage(null)
       setFormOpen(false)
