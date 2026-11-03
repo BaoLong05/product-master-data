@@ -1,5 +1,8 @@
-import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { buildCatalogQuery } from './catalog-search'
+import { CatalogRecordCard, CatalogRecordDetail, type CatalogCardRecord } from './catalog-cards'
+import { createRecordDetailRequestGuard } from './record-detail-request'
+import { WorkspaceNavigation, WorkspacePanel } from './workspace-navigation'
 import { ImportColumnMapping as ImportColumnMappingView } from './import-column-mapping-view'
 import { updateImportColumnMapping, type ImportColumnMapping, type ImportPreviewRow } from './import-column-mapping'
 import { ImportHeaderDiagnostics } from './import-header-diagnostics'
@@ -12,7 +15,7 @@ import { AppPreferencesProvider } from './app-preferences'
 import { PreferenceControls } from './preference-controls'
 import { useAppPreferences } from './use-app-preferences'
 import { localizeApiError } from './api-errors'
-import { formatLocaleDate, formatLocaleNumber, type MessageKey, type Translate } from './i18n'
+import { formatLocaleNumber, type MessageKey, type Translate } from './i18n'
 import './App.css'
 
 type CurrentIdentity = { userId: string | null; email: string | null }
@@ -45,22 +48,16 @@ type ProductRecordForm = {
   internalItem: string
   request: string
 }
-type ProductRecordListItem = {
-  id: string
-  mCode: string | null
-  itemName: string | null
-  companyName: string | null
-  productStatus: string | null
-  updatedAt: string
-  version: number
-}
+type ProductRecordListItem = CatalogCardRecord
 type ProductRecordPage = {
   items: ProductRecordListItem[]
   page: number
   pageSize: number
   totalCount: number
 }
-type ProductRecordDetail = ProductRecordForm & { id: string; version: number }
+type ProductRecordDetail = {
+  [Key in keyof ProductRecordForm]: string | null
+} & { id: string; createdAt: string; updatedAt: string; version: number }
 type RecordAuditPanelState = {
   recordId: string
   recordLabel: string
@@ -140,6 +137,10 @@ function AppContent() {
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
   const [recordPage, setRecordPage] = useState<ProductRecordPage | null>(null)
+  const [activeWorkspaceView, setActiveWorkspaceView] = useState<'catalog' | 'import'>('catalog')
+  const [selectedRecord, setSelectedRecord] = useState<ProductRecordDetail | null>(null)
+  const [recordDetailBusy, setRecordDetailBusy] = useState(false)
+  const [recordDetailError, setRecordDetailError] = useState('')
   const [page, setPage] = useState(1)
   const [listVersion, setListVersion] = useState(0)
   const [searchDraft, setSearchDraft] = useState('')
@@ -176,6 +177,7 @@ function AppContent() {
   const importHistoryListGeneration = useRef(0)
   const importHistoryDetailGeneration = useRef(0)
   const importSessionGeneration = useRef(0)
+  const recordDetailRequestGuard = useRef(createRecordDetailRequestGuard())
 
   useEffect(() => {
     let cancelled = false
@@ -413,7 +415,7 @@ function AppContent() {
     setAuditPanel(null)
   }
 
-  const handleToggleAudit = async (record: ProductRecordListItem) => {
+  const handleToggleAudit = async (record: ProductRecordDetail) => {
     if (auditPanel?.recordId === record.id) {
       closeAuditPanel()
       return
@@ -476,6 +478,7 @@ function AppContent() {
       importSessionGeneration.current += 1
       importHistoryListGeneration.current += 1
       importHistoryDetailGeneration.current += 1
+      recordDetailRequestGuard.current.invalidate()
       setImportFile(null)
       setImportPreview(null)
       setSelectedWorksheetName('')
@@ -491,6 +494,10 @@ function AppContent() {
       setImportHistoryError('')
       setSelectedImportBatchId(null)
       setSelectedImportBatch(null)
+      setSelectedRecord(null)
+      setRecordDetailBusy(false)
+      setRecordDetailError('')
+      setActiveWorkspaceView('catalog')
       setIdentity(null)
       setRecordPage(null)
       setFormOpen(false)
@@ -533,23 +540,45 @@ function AppContent() {
     }
   }
 
-  const handleEdit = async (id: string) => {
-    setFormError('')
-    setNotice('')
+  const handleOpenRecordDetail = async (recordId: string) => {
+    const requestGeneration = recordDetailRequestGuard.current.begin()
+    setSelectedRecord(null)
+    setRecordDetailError('')
+    setRecordDetailBusy(true)
+    closeAuditPanel()
     try {
-      const response = await fetch(`/api/v1/records/${id}`, { credentials: 'same-origin' })
+      const response = await fetch(`/api/v1/records/${recordId}`, { credentials: 'same-origin' })
       if (!response.ok) throw new Error(await responseMessage(response, t))
       const record = await response.json() as ProductRecordDetail
-      const values = Object.fromEntries(formFields.map(({ key }) => [key, record[key] ?? ''])) as ProductRecordForm
-      setForm(values)
-      setEditingRecord({ id: record.id, version: record.version })
-      setFormOpen(true)
+      if (recordDetailRequestGuard.current.isCurrent(requestGeneration)) setSelectedRecord(record)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : t('error.editLoad'))
+      if (recordDetailRequestGuard.current.isCurrent(requestGeneration)) {
+        setRecordDetailError(error instanceof Error ? error.message : t('error.detailLoad'))
+      }
+    } finally {
+      if (recordDetailRequestGuard.current.isCurrent(requestGeneration)) setRecordDetailBusy(false)
     }
   }
 
-  const handleDelete = async (record: ProductRecordListItem) => {
+  const handleCloseRecordDetail = () => {
+    recordDetailRequestGuard.current.invalidate()
+    setSelectedRecord(null)
+    setRecordDetailBusy(false)
+    setRecordDetailError('')
+    closeAuditPanel()
+  }
+
+  const handleEdit = (record: ProductRecordDetail) => {
+    setFormError('')
+    setNotice('')
+    const values = Object.fromEntries(formFields.map(({ key }) => [key, record[key] ?? ''])) as ProductRecordForm
+    setForm(values)
+    setEditingRecord({ id: record.id, version: record.version })
+    handleCloseRecordDetail()
+    setFormOpen(true)
+  }
+
+  const handleDelete = async (record: ProductRecordDetail) => {
     if (!window.confirm(t('error.deleteConfirm', { record: record.mCode || record.itemName || record.id }))) return
     setNotice('')
     try {
@@ -560,13 +589,16 @@ function AppContent() {
         headers: { 'X-CSRF-TOKEN': requestToken },
       })
       if (!response.ok) throw new Error(await responseMessage(response, t))
-      if (auditPanel?.recordId === record.id) closeAuditPanel()
+      handleCloseRecordDetail()
       setListVersion((version) => version + 1)
       setNotice(t('error.deleteSuccess'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('error.deleteFailed'))
     }
   }
+
+  const selectedAuditOpen = selectedRecord !== null && auditPanel?.recordId === selectedRecord.id
+  const selectedRecordLabel = selectedRecord ? selectedRecord.mCode || selectedRecord.itemName || selectedRecord.id : ''
 
   if (!identity) {
     return (
@@ -658,14 +690,22 @@ function AppContent() {
             <h1>{t('app.title')}</h1>
             <p className="page-subtitle">{t('app.subtitle')}</p>
           </div>
-          <button className="button button-primary" type="button" onClick={() => { setFormError(''); setEditingRecord(null); setForm(emptyForm()); setFormOpen((open) => !open) }}>
-            <span aria-hidden="true">＋</span> {t('app.createRecord')}
-          </button>
+          {activeWorkspaceView === 'catalog' && !selectedRecord && (
+            <button className="button button-primary" type="button" onClick={() => { setFormError(''); setEditingRecord(null); setForm(emptyForm()); setFormOpen((open) => !open) }}>
+              <span aria-hidden="true">＋</span> {t('app.createRecord')}
+            </button>
+          )}
         </div>
+
+        <WorkspaceNavigation
+          activeView={activeWorkspaceView}
+          labels={{ navigation: t('app.navigation'), catalog: t('app.catalogTab'), import: t('app.importTab') }}
+          onSelect={setActiveWorkspaceView}
+        />
 
         {notice && <p className="alert alert-success" role="status">{notice}</p>}
 
-        {formOpen && (
+        {activeWorkspaceView === 'catalog' && formOpen && (
           <section className="form-card" aria-labelledby="form-title">
             <div className="section-heading">
               <div><p className="eyebrow">{editingRecord ? t('form.editEyebrow') : t('form.newEyebrow')}</p><h2 id="form-title">{t('form.title')}</h2></div>
@@ -694,6 +734,7 @@ function AppContent() {
           </section>
         )}
 
+        <WorkspacePanel activeView={activeWorkspaceView} view="import" className="import-workspace" ariaLabel={t('app.importTab')}>
         <section className="form-card import-preview-card" aria-labelledby="import-preview-title">
           <div className="section-heading">
             <div><p className="eyebrow">{t('import.eyebrow')}</p><h2 id="import-preview-title">{t('import.title')}</h2></div>
@@ -808,117 +849,127 @@ function AppContent() {
           onRefresh={() => void loadImportHistory()}
           onSelect={(batchId) => void handleSelectImportBatch(batchId)}
         />
+        </WorkspacePanel>
 
-        <section className="catalog-card" aria-labelledby="records-title">
-          <div className="catalog-toolbar">
-            <div><h2 id="records-title">{t('catalog.title')}</h2><p>{recordPage ? t('catalog.totalCount', { count: formatLocaleNumber(locale, recordPage.totalCount) }) : t('catalog.loading')}</p></div>
-            <span className="page-indicator">{t('catalog.page', { page: formatLocaleNumber(locale, page), total: formatLocaleNumber(locale, totalPages) })}</span>
-          </div>
-          {listError && <p className="alert alert-error" role="alert">{listError}</p>}
-          <form className="catalog-search" onSubmit={handleApplySearch}>
-            <div className="search-row">
-              <label className="sr-only" htmlFor="catalog-search-input">{t('catalog.searchLabel')}</label>
-              <input
-                id="catalog-search-input"
-                type="search"
-                placeholder={t('catalog.searchPlaceholder')}
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-              />
-              <button
-                className="button button-quiet"
-                type="button"
-                aria-expanded={filtersOpen}
-                aria-controls={filtersOpen ? 'catalog-field-filters' : undefined}
-                onClick={() => setFiltersOpen((open) => !open)}
-              >
-                {t('catalog.filter')}{activeFilterCount ? ` (${formatLocaleNumber(locale, activeFilterCount)})` : ''}
-              </button>
-              <button className="button button-primary" type="submit">{t('catalog.search')}</button>
+        <WorkspacePanel activeView={activeWorkspaceView} view="catalog" className="catalog-card" ariaLabel={t('catalog.title')}>
+          {recordDetailBusy && <p className="loading-state" role="status">{t('catalog.detailLoading')}</p>}
+          {recordDetailError && (
+            <div className="catalog-detail-error">
+              <p className="alert alert-error" role="alert">{recordDetailError}</p>
+              <button className="button button-quiet" type="button" onClick={handleCloseRecordDetail}>{t('catalog.detailBack')}</button>
             </div>
-            <p className="search-hint">{t('catalog.searchHint')}</p>
-            {filtersOpen && (
-              <div className="field-filters" id="catalog-field-filters">
-                {localizedFormFields.map(({ key, label }) => (
-                  <div className="filter-field" key={key}>
-                    <label htmlFor={`filter-${key}`}>{label}</label>
-                    <input
-                      id={`filter-${key}`}
-                      type="search"
-                      value={filtersDraft[key]}
-                      onChange={(event) => setFiltersDraft((current) => ({ ...current, [key]: event.target.value }))}
+          )}
+          {!recordDetailBusy && !recordDetailError && selectedRecord && (
+                      <>
+                <div className="catalog-record-detail-actions">
+                  <button className="button button-quiet" type="button" onClick={handleCloseRecordDetail}>{t('catalog.detailBack')}</button>
+                  <div className="record-actions">
+                    <button className="button button-quiet" type="button" onClick={() => handleEdit(selectedRecord)}>{t('catalog.edit')}</button>
+                    <button className="button button-quiet" type="button" onClick={() => void handleDelete(selectedRecord)}>{t('catalog.delete')}</button>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      aria-label={`${t(selectedAuditOpen ? 'catalog.hideAudit' : 'catalog.showAudit')} ${selectedRecordLabel}`}
+                      aria-expanded={selectedAuditOpen}
+                      aria-controls={selectedAuditOpen ? 'record-audit-panel' : undefined}
+                      onClick={() => void handleToggleAudit(selectedRecord)}
+                    >{t(selectedAuditOpen ? 'catalog.hideAudit' : 'catalog.audit')}</button>
+                  </div>
+                </div>
+                <CatalogRecordDetail
+                  record={selectedRecord}
+                  fields={localizedFormFields}
+                  emptyValue="—"
+                  noCompanyLabel={t('catalog.noCompanyName')}
+                  noImageLabel={t('catalog.noPicImage')}
+                />
+                {selectedAuditOpen && auditPanel && (
+                  <div className="record-audit-detail">
+                    <RecordAuditHistory
+                      recordLabel={auditPanel.recordLabel}
+                      events={auditPanel.events}
+                      loading={auditPanel.loading}
+                      error={auditPanel.error}
+                      onClose={closeAuditPanel}
                     />
                   </div>
+                )}
+            </>
+          )}
+          {!recordDetailBusy && !recordDetailError && !selectedRecord && (
+            <>
+              <div className="catalog-toolbar">
+                <div><h2 id="records-title">{t('catalog.title')}</h2><p>{recordPage ? t('catalog.totalCount', { count: formatLocaleNumber(locale, recordPage.totalCount) }) : t('catalog.loading')}</p></div>
+                <span className="page-indicator">{t('catalog.page', { page: formatLocaleNumber(locale, page), total: formatLocaleNumber(locale, totalPages) })}</span>
+              </div>
+              {listError && <p className="alert alert-error" role="alert">{listError}</p>}
+              <form className="catalog-search" onSubmit={handleApplySearch}>
+                <div className="search-row">
+                  <label className="sr-only" htmlFor="catalog-search-input">{t('catalog.searchLabel')}</label>
+                  <input
+                    id="catalog-search-input"
+                    type="search"
+                    placeholder={t('catalog.searchPlaceholder')}
+                    value={searchDraft}
+                    onChange={(event) => setSearchDraft(event.target.value)}
+                  />
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    aria-expanded={filtersOpen}
+                    aria-controls={filtersOpen ? 'catalog-field-filters' : undefined}
+                    onClick={() => setFiltersOpen((open) => !open)}
+                  >
+                    {t('catalog.filter')}{activeFilterCount ? ` (${formatLocaleNumber(locale, activeFilterCount)})` : ''}
+                  </button>
+                  <button className="button button-primary" type="submit">{t('catalog.search')}</button>
+                </div>
+                <p className="search-hint">{t('catalog.searchHint')}</p>
+                {filtersOpen && (
+                  <div className="field-filters" id="catalog-field-filters">
+                    {localizedFormFields.map(({ key, label }) => (
+                      <div className="filter-field" key={key}>
+                        <label htmlFor={`filter-${key}`}>{label}</label>
+                        <input
+                          id={`filter-${key}`}
+                          type="search"
+                          value={filtersDraft[key]}
+                          onChange={(event) => setFiltersDraft((current) => ({ ...current, [key]: event.target.value }))}
+                        />
+                      </div>
+                    ))}
+                    <div className="filter-actions">
+                      <button className="button button-quiet" type="button" onClick={handleClearSearch}>{t('catalog.clearFilters')}</button>
+                      <button className="button button-primary" type="submit">{t('catalog.applyFilters')}</button>
+                    </div>
+                  </div>
+                )}
+              </form>
+              <div className="catalog-record-grid" aria-busy={listBusy}>
+                {recordPage?.items.map((record) => (
+                  <CatalogRecordCard
+                    key={record.id}
+                    record={record}
+                    noCompanyLabel={t('catalog.noCompanyName')}
+                    noImageLabel={t('catalog.noPicImage')}
+                    onSelect={(id) => void handleOpenRecordDetail(id)}
+                  />
                 ))}
-                <div className="filter-actions">
-                  <button className="button button-quiet" type="button" onClick={handleClearSearch}>{t('catalog.clearFilters')}</button>
-                  <button className="button button-primary" type="submit">{t('catalog.applyFilters')}</button>
+                {!listBusy && recordPage?.items.length === 0 && (
+                  <div className="empty-state"><span className="empty-icon" aria-hidden="true">▤</span><h3>{hasActiveSearch ? t('catalog.noMatches') : t('catalog.emptyTitle')}</h3><p>{hasActiveSearch ? t('catalog.emptySearch') : t('catalog.emptyCatalog')}</p>{hasActiveSearch ? <button className="button button-secondary" type="button" onClick={handleClearSearch}>{t('catalog.clearSearch')}</button> : <button className="button button-secondary" type="button" onClick={() => setFormOpen(true)}>{t('app.createFirst')}</button>}</div>
+                )}
+                {listBusy && !recordPage && <p className="loading-state" role="status">{t('catalog.loadingRecords')}</p>}
+              </div>
+              <div className="pagination">
+                <span>{recordPage ? t('catalog.showing', { shown: formatLocaleNumber(locale, recordPage.items.length), total: formatLocaleNumber(locale, recordPage.totalCount) }) : ''}</span>
+                <div className="pagination-actions">
+                  <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.max(1, current - 1)) }} disabled={page <= 1 || listBusy}>{t('catalog.previous')}</button>
+                  <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.min(totalPages, current + 1)) }} disabled={page >= totalPages || listBusy}>{t('catalog.next')}</button>
                 </div>
               </div>
-            )}
-          </form>
-          <div className="table-scroll" aria-busy={listBusy}>
-            <table>
-              <caption className="sr-only">{t('catalog.tableCaption')}</caption>
-              <thead><tr><th scope="col">M.CODE</th><th scope="col">{t('field.itemName')}</th><th scope="col">{t('catalog.columnCompany')}</th><th scope="col">{t('catalog.columnStatus')}</th><th scope="col">{t('catalog.columnUpdated')}</th><th scope="col"><span className="sr-only">{t('catalog.rowActions')}</span></th></tr></thead>
-              <tbody>
-                {recordPage?.items.map((record) => {
-                  const auditOpen = auditPanel?.recordId === record.id
-                  const recordLabel = record.mCode || record.itemName || record.id
-                  return (
-                    <Fragment key={record.id}>
-                      <tr>
-                        <td><span className="code-value">{record.mCode || '—'}</span></td>
-                        <td className="item-name">{record.itemName || t('catalog.noName')}</td>
-                        <td>{record.companyName || '—'}</td>
-                        <td><span className="status-pill">{record.productStatus || t('catalog.noStatus')}</span></td>
-                        <td className="date-cell">{formatLocaleDate(locale, record.updatedAt)}</td>
-                        <td>
-                          <div className="record-actions">
-                            <button className="button button-quiet" type="button" onClick={() => void handleEdit(record.id)}>{t('catalog.edit')}</button>
-                            <button className="button button-quiet" type="button" onClick={() => void handleDelete(record)}>{t('catalog.delete')}</button>
-                            <button
-                              className="button button-quiet"
-                              type="button"
-                              aria-label={`${t(auditOpen ? 'catalog.hideAudit' : 'catalog.showAudit')} ${recordLabel}`}
-                              aria-expanded={auditOpen}
-                              aria-controls={auditOpen ? 'record-audit-panel' : undefined}
-                              onClick={() => void handleToggleAudit(record)}
-                            >{t(auditOpen ? 'catalog.hideAudit' : 'catalog.audit')}</button>
-                          </div>
-                        </td>
-                      </tr>
-                      {auditOpen && auditPanel && (
-                        <tr className="record-audit-row">
-                          <td className="record-audit-cell" colSpan={6}>
-                            <RecordAuditHistory
-                              recordLabel={auditPanel.recordLabel}
-                              events={auditPanel.events}
-                              loading={auditPanel.loading}
-                              error={auditPanel.error}
-                              onClose={closeAuditPanel}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-            {!listBusy && recordPage?.items.length === 0 && (
-              <div className="empty-state"><span className="empty-icon" aria-hidden="true">▤</span><h3>{hasActiveSearch ? t('catalog.noMatches') : t('catalog.emptyTitle')}</h3><p>{hasActiveSearch ? t('catalog.emptySearch') : t('catalog.emptyCatalog')}</p>{hasActiveSearch ? <button className="button button-secondary" type="button" onClick={handleClearSearch}>{t('catalog.clearSearch')}</button> : <button className="button button-secondary" type="button" onClick={() => setFormOpen(true)}>{t('app.createFirst')}</button>}</div>
-            )}
-            {listBusy && !recordPage && <p className="loading-state" role="status">{t('catalog.loadingRecords')}</p>}
-          </div>
-          <div className="pagination">
-            <span>{recordPage ? t('catalog.showing', { shown: formatLocaleNumber(locale, recordPage.items.length), total: formatLocaleNumber(locale, recordPage.totalCount) }) : ''}</span>
-            <div className="pagination-actions">
-              <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.max(1, current - 1)) }} disabled={page <= 1 || listBusy}>{t('catalog.previous')}</button>
-              <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.min(totalPages, current + 1)) }} disabled={page >= totalPages || listBusy}>{t('catalog.next')}</button>
-            </div>
-          </div>
-        </section>
+            </>
+          )}
+        </WorkspacePanel>
       </main>
       <footer className="app-footer"><span>Product Master Data</span><span>{t('app.footer')}</span></footer>
     </div>

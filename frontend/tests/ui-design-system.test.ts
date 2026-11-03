@@ -33,6 +33,7 @@ describe('frontend visual design system', () => {
   test('gives desktop page sections the generous spacing specified by the design guide', () => {
     expect(ruleBody(appStyles, '.workspace')).toContain('padding: var(--space-24) 0 var(--space-32)')
     expect(ruleBody(appStyles, '.page-heading')).toContain('margin-bottom: var(--space-12)')
+    expect(ruleBody(appStyles, '.workspace-nav')).toContain('margin-bottom: var(--space-8)')
     expect(ruleBody(appStyles, '.import-preview-card')).toContain('margin-bottom: var(--space-12)')
     expect(ruleBody(appStyles, '.form-card')).toContain('margin-bottom: var(--space-12)')
   })

@@ -118,12 +118,9 @@ public static class ProductRecordEndpoints
                 .Take(pageSize)
                 .Select(record => new ProductRecordListItemResponse(
                     record.Id,
-                    record.MCode,
-                    record.ItemName,
                     record.CompanyName,
-                    record.ProductStatus,
-                    record.UpdatedAt,
-                    record.Version))
+                    record.PicImage,
+                    record.PicUrl))
                 .ToListAsync(cancellationToken);
 
         return Results.Ok(new ProductRecordPageResponse(items, page, pageSize, totalCount));
@@ -582,12 +579,9 @@ public sealed record ProductRecordResponse(
 
 public sealed record ProductRecordListItemResponse(
     Guid Id,
-    string? MCode,
-    string? ItemName,
     string? CompanyName,
-    string? ProductStatus,
-    DateTimeOffset UpdatedAt,
-    long Version);
+    string? PicImage,
+    string? PicUrl);
 
 public sealed record ProductRecordPageResponse(
     IReadOnlyList<ProductRecordListItemResponse> Items,

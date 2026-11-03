@@ -8,8 +8,8 @@ This map records which currently implemented HTTP routes have a user-facing surf
 | `POST /api/v1/auth/login` | Sign-in form | Cookie login; generic failure message. |
 | `POST /api/v1/auth/logout` | Header sign-out control | Cookie logout and server-side session-stamp revocation. |
 | `GET /api/v1/auth/me` | Session restoration and signed-in header | Displays current identity; response does not contain effective permissions. |
-| `GET /api/v1/records` | Catalog table, global search, all-field filters, pagination | Active records only; server remains authoritative for `records.read`. |
-| `GET /api/v1/records/{id}` | Edit form population | Existing detail route; edit-save also requires read access to load details. |
+| `GET /api/v1/records` | Company-and-PIC card catalog, global search, all-field filters, pagination | Active records only; list items expose only `id`, `companyName`, `picImage`, and `picUrl`; server remains authoritative for `records.read`. |
+| `GET /api/v1/records/{id}` | Selected-record detail and edit form population | Detail view shows all 27 source fields; edit-save also requires read access to load details. |
 | `POST /api/v1/records` | Create-record form | Sends the 27 optional source fields; server validates permission, CSRF, and non-empty M.CODE uniqueness. |
 | `PUT /api/v1/records/{id}` | Edit-record form | Includes observed version; server validates permission, CSRF, and concurrency. |
 | `DELETE /api/v1/records/{id}` | Per-row confirmed soft-delete | Includes observed version and CSRF token; server retains the record and audits the action. |
