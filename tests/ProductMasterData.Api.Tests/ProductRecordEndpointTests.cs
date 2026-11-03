@@ -49,6 +49,57 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
+    public async Task Record_list_returns_only_card_fields_while_detail_retains_all_source_fields()
+    {
+        const string userName = "record.catalog-card.test";
+        const string password = "A-strong-record-catalog-card-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        var recordId = await SeedRecordAsync(factory, "CARD-001", "Initial item");
+        var sourceProperties = typeof(ProductRecord).GetProperties()
+            .Where(property => property.PropertyType == typeof(string))
+            .OrderBy(property => property.Name)
+            .ToArray();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+            var record = await database.ProductRecords.SingleAsync(item => item.Id == recordId);
+            foreach (var property in sourceProperties)
+            {
+                var fieldName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+                property.SetValue(record, $"catalog-value-{fieldName}");
+            }
+
+            await database.SaveChangesAsync();
+        }
+
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var listResponse = await client.GetAsync("/api/v1/records");
+        using var listDocument = JsonDocument.Parse(await listResponse.Content.ReadAsStringAsync());
+        var item = listDocument.RootElement.GetProperty("items")[0];
+
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        Assert.Equal(27, sourceProperties.Length);
+        Assert.Equal(new[] { "companyName", "id", "picImage", "picUrl" },
+            item.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
+        Assert.Equal("catalog-value-companyName", item.GetProperty("companyName").GetString());
+        Assert.Equal("catalog-value-picImage", item.GetProperty("picImage").GetString());
+        Assert.Equal("catalog-value-picUrl", item.GetProperty("picUrl").GetString());
+
+        using var detailResponse = await client.GetAsync($"/api/v1/records/{recordId}");
+        using var detailDocument = JsonDocument.Parse(await detailResponse.Content.ReadAsStringAsync());
+        var detail = detailDocument.RootElement;
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        foreach (var property in sourceProperties)
+        {
+            var fieldName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+            Assert.Equal($"catalog-value-{fieldName}", detail.GetProperty(fieldName).GetString());
+        }
+    }
+
+    [Fact]
     public async Task Creating_a_record_writes_a_safe_audit_event_readable_by_an_auditor()
     {
         const string userName = "record.audit.test";
