@@ -129,7 +129,7 @@ public static class ImportCommitEndpoints
         }
         catch (WorkbookRowLimitExceededException)
         {
-            return Results.BadRequest(new ApiErrorResponse("workbook_row_limit_exceeded", "The worksheet exceeds the 10,000 data-row limit."));
+            return Results.BadRequest(new ApiErrorResponse("workbook_row_limit_exceeded", "The worksheet exceeds the 20,000 data-row limit."));
         }
         catch (InvalidWorkbookException exception)
         {

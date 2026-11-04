@@ -31,7 +31,7 @@ Out of scope: typed/date/decimal/enum/URL interpretation, required-field rules, 
 | `GET /api/v1/imports/history` | bounded `take` (default 20, maximum 100) | `imports.read` | newest-first batch summaries |
 | `GET /api/v1/imports/history/{batchId}` | UUID | `imports.read` | batch summary and safe row issues; 404 for unknown batch |
 
-Transport errors use safe stable `{code,message}` responses. Commit rejects missing/empty/unsupported/malformed/oversized workbooks, missing worksheet, invalid worksheet, malformed/duplicate/unknown column mapping, and rows beyond the established 10,000-position bound. Authentication, authorization and antiforgery are checked before workbook processing.
+Transport errors use safe stable `{code,message}` responses. Commit rejects missing/empty/unsupported/malformed/oversized workbooks, missing worksheet, invalid worksheet, malformed/duplicate/unknown column mapping, and rows beyond the established 20,000-position bound. Authentication, authorization and antiforgery are checked before workbook processing.
 
 ## Acceptance tests
 
@@ -52,7 +52,7 @@ Transport errors use safe stable `{code,message}` responses. Commit rejects miss
 
 - RED: on resuming this slice, the first `bun run check` failed because the commit/history state and UI components were disconnected (unused imports/state in `App.tsx`). The focused interaction/view tests were then run after wiring; a dedicated behavioral RED was not captured before editing, so strict RED evidence for that UI slice is incomplete.
 - GREEN: focused frontend interaction/view tests passed (6 tests); the follow-up logout-privacy test passed after its RED; latest full `bun run check` passed against PostgreSQL (frontend 50 tests; API 91 passed, 0 skipped).
-- Cleanup: removed the unused detail-view import, fixed import-history effect dependencies/warnings, corrected confirmation copy to describe the server's 10,000-row bound rather than the 10-row preview, and guarded stale async import/history responses after logout; reran full checks with no frontend lint warnings.
+- Cleanup: removed the unused detail-view import, fixed import-history effect dependencies/warnings, corrected confirmation copy to describe the server's 20,000-row bound rather than the 10-row preview, and guarded stale async import/history responses after logout; reran full checks with no frontend lint warnings.
 - `git diff --check`: passed. All 4 provider-backed tests ran successfully using temporary, isolated disposable databases (`import_validation_test`, `audit_test`, `permission_test`, `search_test`); the temporary role and databases were removed afterward. Docker's original `product_master_data` database was left untouched.
 - Follow-up security slice: `bun test frontend/tests/import-session-security.test.ts` first failed because logout did not clear workbook/import state (RED); after clearing it and invalidating outstanding import/history requests on successful logout, the focused privacy/workflow tests passed (2 tests). This prevents previewed workbook cell contents and prior batch details from appearing to the next account on a shared browser.
-- Original supplied workbook is not in the repository; synthetic fixtures cannot establish compatibility with every OpenXML feature.
+- The supplied workbook's ordinary cell rows fit the current row/file/XML bounds; embedded drawing images are not handled by this import contract.

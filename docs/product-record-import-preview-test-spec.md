@@ -8,7 +8,7 @@ Status: implemented as a stateless structural inspection slice; no import batch 
 - A supported workbook returns worksheet names and a bounded list of the first-row header values for each worksheet. Values are read as text; formulas are never evaluated or fetched. No business records, import history, or audit events are written.
 - Upload size is capped at 10 MiB. Wrong extensions, missing/empty files, and malformed workbooks receive structured HTTP 400 errors; ASP.NET Core may reject requests that exceed multipart/request limits with HTTP 413 before the endpoint runs.
 - Anonymous requests receive 401; authenticated users without `imports.preview` receive 403. Missing/invalid CSRF tokens do not process the upload.
-- The UI lets a signed-in operator choose an `.xlsx`, inspect sheet/header output, view exact source-header diagnostics, and safely report errors. Header recognition itself is not mapping. The separate client-side mapping step is specified in `product-record-import-column-mapping-test-spec.md`; neither step implies row validation or import/commit is available.
+- The UI lets a signed-in operator choose an `.xlsx`, inspect sheet/header output, view exact source-header diagnostics, and safely report errors. Header recognition itself is not mapping. The separate client-side mapping step is specified in `product-record-import-column-mapping-test-spec.md`; preview/mapping do not imply that this endpoint validates or commits rows. Commit is a separate explicit workflow.
 
 ## Scope and limits
 

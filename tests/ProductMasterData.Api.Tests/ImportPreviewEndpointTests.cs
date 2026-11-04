@@ -87,6 +87,33 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
+    public async Task Authorized_operator_can_commit_all_rows_in_the_supplied_workbook()
+    {
+        const int expectedRows = 11_816;
+        const string userName = "import.commit.real-workbook-size.test";
+        const string password = "A-strong-import-commit-real-workbook-size-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "imports.commit");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["Item Name"], expectedRows))), "file", "products.xlsx");
+        content.Add(new StringContent("DATA"), "worksheetName");
+        content.Add(new StringContent("{\"1\":\"itemName\"}"), "columnMapping");
+
+        using var response = await client.PostAsync("/api/v1/imports/commit", content);
+        var result = await response.Content.ReadFromJsonAsync<ImportCommitResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(result);
+        Assert.Equal(expectedRows, result.ScannedRows);
+        Assert.Equal(expectedRows, result.ImportedRows);
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal(expectedRows, await database.ProductRecords.CountAsync());
+    }
+
+    [Fact]
     public async Task Identical_import_replay_returns_original_batch_without_repeating_side_effects()
     {
         const string userName = "import.commit.replay.test";
@@ -243,7 +270,7 @@ public sealed class ImportPreviewEndpointTests
         var scanner = new OpenXmlWorkbookPreviewReader();
 
         Assert.Throws<WorkbookRowLimitExceededException>(() => scanner.ScanMCode(
-            CreateWorkbookWithSparseMCodeRow(10_002),
+            CreateWorkbookWithSparseMCodeRow(20_002),
             "DATA",
             1,
             CancellationToken.None));
@@ -255,13 +282,28 @@ public sealed class ImportPreviewEndpointTests
         var scanner = new OpenXmlWorkbookPreviewReader();
 
         var scan = scanner.ScanMCode(
-            CreateWorkbookWithSparseMCodeRow(10_001),
+            CreateWorkbookWithSparseMCodeRow(20_001),
             "DATA",
             1,
             CancellationToken.None);
 
-        Assert.Equal(10_000, scan.ScannedRows);
-        Assert.Equal(10_001, Assert.Single(scan.Values).RowNumber);
+        Assert.Equal(20_000, scan.ScannedRows);
+        Assert.Equal(20_001, Assert.Single(scan.Values).RowNumber);
+    }
+
+    [Fact]
+    public void Workbook_m_code_scanner_accepts_the_supplied_workbook_row_span()
+    {
+        var scanner = new OpenXmlWorkbookPreviewReader();
+
+        var scan = scanner.ScanMCode(
+            CreateWorkbookWithSparseMCodeRow(11_817),
+            "DATA",
+            1,
+            CancellationToken.None);
+
+        Assert.Equal(11_816, scan.ScannedRows);
+        Assert.Equal(11_817, Assert.Single(scan.Values).RowNumber);
     }
 
     [Fact]
@@ -838,16 +880,17 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
-    public async Task Workbook_over_row_limit_is_rejected_without_partial_validation_results()
+    public async Task Workbook_over_row_limit_is_rejected_without_partial_results_or_writes()
     {
         const string userName = "import.validate.row-limit.test";
         const string password = "A-strong-import-validate-row-limit-passphrase-2026";
         using var factory = new LoginApiFactory();
         await factory.CreateUserAsync(userName, password);
-        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read", "imports.commit");
         using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+        var workbook = CreateWorkbook(("DATA", ["M.CODE"], 20_001));
         using var content = new MultipartFormDataContent();
-        content.Add(new ByteArrayContent(CreateWorkbook(("DATA", ["M.CODE"], 10_001))), "file", "products.xlsx");
+        content.Add(new ByteArrayContent(workbook), "file", "products.xlsx");
         content.Add(new StringContent("DATA"), "worksheetName");
         content.Add(new StringContent("1"), "mCodeColumnNumber");
 
@@ -856,6 +899,21 @@ public sealed class ImportPreviewEndpointTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("workbook_row_limit_exceeded", error?.Code);
+
+        using var commitContent = new MultipartFormDataContent();
+        commitContent.Add(new ByteArrayContent(workbook), "file", "products.xlsx");
+        commitContent.Add(new StringContent("DATA"), "worksheetName");
+        commitContent.Add(new StringContent("{\"1\":\"itemName\"}"), "columnMapping");
+        using var commitResponse = await client.PostAsync("/api/v1/imports/commit", commitContent);
+        var commitError = await commitResponse.Content.ReadFromJsonAsync<ImportPreviewErrorResponse>();
+        Assert.Equal(HttpStatusCode.BadRequest, commitResponse.StatusCode);
+        Assert.Equal("workbook_row_limit_exceeded", commitError?.Code);
+
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Empty(await database.ProductRecords.ToListAsync());
+        Assert.Empty(await database.ImportBatches.ToListAsync());
+        Assert.Empty(await database.AuditEvents.ToListAsync());
     }
 
     private sealed record ImportPreviewResponse(IReadOnlyList<WorksheetPreview> Worksheets);
