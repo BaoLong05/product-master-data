@@ -6,14 +6,14 @@ Status: approved for the selected duplicate-validation slice
 
 - API outcome: after explicitly selecting a worksheet and mapping one source column to `M.CODE`, an import operator can identify source rows whose exact `M.CODE` already exists or is repeated in the selected worksheet. Client UI integration is out of scope for this slice.
 - Actor: authenticated user with both `imports.preview` and `records.read` permissions.
-- This is validation only; it does not make rows importable or commit them.
+- This endpoint only validates duplicates; import commit is a separate explicit endpoint/workflow.
 
 ## Scope
 
 ### In scope
 
 - `POST /api/v1/imports/validate` accepts multipart `file`, required exact `worksheetName`, and required one-based `mCodeColumnNumber` selected by the user.
-- Stream the selected worksheet, scanning at most 10,000 physical data-row positions after its header. Omitted row numbers between the header and a later explicit row count toward the bound and `scannedRows`; reject the entire request if the span exceeds that bound and never return partial validation results.
+- Stream the selected worksheet, scanning at most 20,000 physical data-row positions after its header. Omitted row numbers between the header and a later explicit row count toward the bound and `scannedRows`; reject the entire request if the span exceeds that bound and never return partial validation results.
 - Return the selected worksheet name, scanned data-row count, duplicate-row count, and source row numbers with stable issue code `duplicate_m_code`. Do not echo M.CODE values.
 - Detect a duplicate when a non-empty exact M.CODE matches any stored record (including soft-deleted rows, consistent with the database unique index) or occurs more than once in the selected worksheet. For an in-workbook duplicate group, report every row in the group; report at most one issue per source row.
 - Match exact source strings: do not trim, case-fold, convert, or normalize. Ignore null/empty values and formula cells (including cached formula values); whitespace-only strings remain values, consistent with the current database invariant.

@@ -36,7 +36,7 @@ Reduce the default authenticated screen to a compact company-and-PIC-image catal
 
 ## Workbook limitation
 
-The user's real workbook has not been found or inspected. The available `C:\lien_test\pmd_demo_import.xlsx` is synthetic and has blank PIC fields. This change can render URL-valued PIC fields safely, but cannot establish whether the user's workbook contains URL text, formulas, or embedded drawing images; embedded image extraction is not assumed.
+The supplied workbook has 27 source columns, 11,816 data-row positions, 10 embedded images, and 9,315 formula cells with cached #NAME? results. Formula expressions and cached results must not be imported. Its rows fit the revised 20,000-position cap; embedded image extraction is not implemented. See docs/data-and-import.md for workbook observations.
 
 ## Verification evidence
 

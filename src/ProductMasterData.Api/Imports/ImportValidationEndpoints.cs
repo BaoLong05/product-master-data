@@ -123,7 +123,7 @@ public static class ImportValidationEndpoints
         }
         catch (WorkbookRowLimitExceededException)
         {
-            return Results.BadRequest(new ApiErrorResponse("workbook_row_limit_exceeded", "The worksheet exceeds the 10,000 data-row validation limit."));
+            return Results.BadRequest(new ApiErrorResponse("workbook_row_limit_exceeded", "The worksheet exceeds the 20,000 data-row validation limit."));
         }
         catch (InvalidWorkbookException exception)
         {

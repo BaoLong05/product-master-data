@@ -12,7 +12,7 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWork
     private const int MaximumWorksheets = 20;
     private const int MaximumColumns = 100;
     private const int MaximumPreviewRows = 10;
-    private const int MaximumMCodeValidationRows = 10_000;
+    private const int MaximumWorkbookDataRowSpan = 20_000;
     private const int MaximumExcelRowNumber = 1_048_576;
     private const long MaximumXmlCharactersPerPart = 1_000_000;
     private const long MaximumValidationXmlCharactersPerPart = 20_000_000;
@@ -101,7 +101,7 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWork
                     }
 
                     scannedRows = checked(rowNumber - headerRowNumber);
-                    if (scannedRows > MaximumMCodeValidationRows)
+                    if (scannedRows > MaximumWorkbookDataRowSpan)
                     {
                         throw new WorkbookRowLimitExceededException();
                     }
@@ -335,7 +335,7 @@ public sealed class OpenXmlWorkbookPreviewReader : IWorkbookPreviewReader, IWork
                     }
                     else
                     {
-                        if (rowNumber - header.RowNumber > MaximumMCodeValidationRows)
+                        if (rowNumber - header.RowNumber > MaximumWorkbookDataRowSpan)
                         {
                             throw new WorkbookRowLimitExceededException();
                         }
