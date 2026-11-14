@@ -49,7 +49,41 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
-    public async Task Record_list_returns_only_card_fields_while_detail_retains_all_source_fields()
+    public async Task Customer_library_groups_active_records_by_company_and_counts_items()
+    {
+        const string userName = "record.customer-library.test";
+        const string password = "A-strong-record-customer-library-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.create", "records.read");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        foreach (var record in new[]
+        {
+            new { mCode = "LIB-001", companyName = "BLUE HORIZON CO. LTD", itemName = "HANGTAG" },
+            new { mCode = "LIB-002", companyName = "BLUE HORIZON CO. LTD", itemName = "CARE LABEL" },
+            new { mCode = "LIB-003", companyName = "OTHER COMPANY", itemName = "BOX" }
+        })
+        {
+            using var create = await client.PostAsJsonAsync("/api/v1/records", record);
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        }
+
+        using var response = await client.GetAsync("/api/v1/records/customers");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var customers = document.RootElement.GetProperty("items");
+        var blueHorizon = customers.EnumerateArray().Single(item => item.GetProperty("name").GetString() == "BLUE HORIZON CO. LTD");
+        Assert.Equal(2, blueHorizon.GetProperty("itemCount").GetInt32());
+        Assert.Equal(2, document.RootElement.GetProperty("totalCount").GetInt32());
+
+        using var exactItemsResponse = await client.GetAsync("/api/v1/records?companyNameExact=BLUE%20HORIZON%20CO.%20LTD");
+        Assert.Equal(HttpStatusCode.OK, exactItemsResponse.StatusCode);
+        using var exactItemsDocument = JsonDocument.Parse(await exactItemsResponse.Content.ReadAsStringAsync());
+        Assert.Equal(2, exactItemsDocument.RootElement.GetProperty("totalCount").GetInt32());
+    }
+    [Fact]
+    public async Task Record_list_returns_card_fields_needed_by_the_customer_library_while_detail_retains_all_source_fields()
     {
         const string userName = "record.catalog-card.test";
         const string password = "A-strong-record-catalog-card-passphrase-2026";
@@ -82,9 +116,12 @@ public sealed class ProductRecordEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         Assert.Equal(27, sourceProperties.Length);
-        Assert.Equal(new[] { "companyName", "id", "picImage", "picUrl" },
+        Assert.Equal(new[] { "companyName", "id", "itemCode", "itemName", "mCode", "picImage", "picUrl" },
             item.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
         Assert.Equal("catalog-value-companyName", item.GetProperty("companyName").GetString());
+        Assert.Equal("catalog-value-itemName", item.GetProperty("itemName").GetString());
+        Assert.Equal("catalog-value-itemCode", item.GetProperty("itemCode").GetString());
+        Assert.Equal("catalog-value-mCode", item.GetProperty("mCode").GetString());
         Assert.Equal("catalog-value-picImage", item.GetProperty("picImage").GetString());
         Assert.Equal("catalog-value-picUrl", item.GetProperty("picUrl").GetString());
 

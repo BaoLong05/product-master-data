@@ -6,7 +6,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Antiforgery;
 using System.Threading.RateLimiting;
+using System.Globalization;
 using System.Security.Claims;
+using Microsoft.Extensions.Localization;
+using Microsoft.AspNetCore.Localization;
+using ProductMasterData.Api;
 using ProductMasterData.Api.Health;
 using ProductMasterData.Api.Catalog;
 using ProductMasterData.Api.Identity;
@@ -19,6 +23,15 @@ using ProductMasterData.Infrastructure.Health;
 using ProductMasterData.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddLocalization();
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    var cultures = new[] { new CultureInfo("vi"), new CultureInfo("en"), new CultureInfo("ko") };
+    options.DefaultRequestCulture = new RequestCulture("vi");
+    options.SupportedCultures = cultures;
+    options.SupportedUICultures = cultures;
+});
 
 builder.Services.AddOpenApi();
 builder.Services
@@ -92,6 +105,7 @@ builder.Services
     .AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"], timeout: TimeSpan.FromSeconds(3));
 
 var app = builder.Build();
+app.UseRequestLocalization();
 app.UseStatusCodePages();
 app.UseRouting();
 app.UseRateLimiter();
@@ -105,6 +119,25 @@ app.MapImportPreviewEndpoints();
 app.MapImportValidationEndpoints();
 app.MapImportCommitEndpoints();
 app.MapImportHistoryEndpoints();
+app.MapGet("/api/v1/localization/{culture}", (string culture, IStringLocalizer<SharedResource> localizer) =>
+{
+    var cultureName = culture.ToLowerInvariant() switch
+    {
+        "vi" => "vi",
+        "en" => "en",
+        "ko" => "ko",
+        _ => null,
+    };
+    if (cultureName is null) return Results.BadRequest(new { error = "unsupported_culture" });
+
+    CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
+    var translations = localizer.GetAllStrings(includeParentCultures: false)
+        .ToDictionary(item => item.Name, item => item.Value, StringComparer.Ordinal);
+    return Results.Ok(translations);
+})
+    .AllowAnonymous();
+
 app.MapGet("/api/v1/auth/csrf", (HttpContext httpContext, IAntiforgery antiforgery) =>
 {
     var tokens = antiforgery.GetAndStoreTokens(httpContext);

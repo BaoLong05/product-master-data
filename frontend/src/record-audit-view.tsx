@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ProductRecordAuditEvent } from './record-audit'
 import { useAppPreferences } from './use-app-preferences'
-import { formatLocaleDateTime, type MessageKey } from './i18n'
+import { formatLocaleDateTime, type MessageKey } from './localization'
 
 const actionLabels: Record<string, MessageKey> = {
   'records.created': 'audit.actionCreated',

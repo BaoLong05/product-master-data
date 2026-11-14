@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { localizeApiError } from '../src/api-errors'
-import { translate, type Locale } from '../src/i18n'
+import { translateFor } from './translation-fixture'
+import type { Locale, MessageKey } from '../src/localization'
 
 const backendCodes = {
   invalid_antiforgery_token: 'error.backend.invalidAntiforgeryToken',
@@ -26,7 +27,7 @@ const backendCodes = {
 } as const
 
 const locales: Locale[] = ['vi', 'en', 'ko']
-const tFor = (locale: Locale) => (key: Parameters<typeof translate>[1], values?: Parameters<typeof translate>[2]) => translate(locale, key, values)
+const tFor = (locale: Locale) => (key: MessageKey, values?: Parameters<typeof translateFor>[2]) => translateFor(locale, key, values)
 const testDirectory = dirname(fileURLToPath(import.meta.url))
 
 describe('backend API error localization', () => {
@@ -51,7 +52,7 @@ describe('backend API error localization', () => {
       const response = Response.json({ code, message: `raw server message for ${code}` }, { status: code === 'duplicate_m_code' || code === 'record_version_conflict' ? 409 : 400 })
       for (const locale of locales) {
         const message = await localizeApiError(response.clone(), tFor(locale))
-        expect(message).toBe(translate(locale, key))
+        expect(message).toBe(translateFor(locale, key))
         expect(message).not.toContain('raw server message')
       }
     }
@@ -61,8 +62,8 @@ describe('backend API error localization', () => {
     const unknown = Response.json({ code: 'future_unknown_code', message: 'raw server message' }, { status: 400 })
     const statusOnly = new Response(null, { status: 500 })
     for (const locale of locales) {
-      expect(await localizeApiError(unknown.clone(), tFor(locale))).toBe(translate(locale, 'error.badRequest'))
-      expect(await localizeApiError(statusOnly.clone(), tFor(locale))).toBe(translate(locale, 'error.httpStatus', { status: 500 }))
+      expect(await localizeApiError(unknown.clone(), tFor(locale))).toBe(translateFor(locale, 'error.badRequest'))
+      expect(await localizeApiError(statusOnly.clone(), tFor(locale))).toBe(translateFor(locale, 'error.httpStatus', { status: 500 }))
     }
   })
 
@@ -76,10 +77,10 @@ describe('backend API error localization', () => {
     ] as const
     for (const locale of locales) {
       for (const [status, key] of cases) {
-        expect(await localizeApiError(new Response(null, { status }), tFor(locale))).toBe(translate(locale, key))
+        expect(await localizeApiError(new Response(null, { status }), tFor(locale))).toBe(translateFor(locale, key))
       }
       expect(await localizeApiError(new Response(null, { status: 403 }), tFor(locale), { forbiddenMessage: 'audit.noPermission' }))
-        .toBe(translate(locale, 'audit.noPermission'))
+        .toBe(translateFor(locale, 'audit.noPermission'))
     }
   })
 })

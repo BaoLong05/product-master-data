@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { loadRecordAudit } from '../src/record-audit'
-import { translate, type MessageKey, type MessageValues } from '../src/i18n'
+import { translateFor } from './translation-fixture'
+import type { MessageKey, MessageValues } from '../src/localization'
 
 const event = {
   eventId: 'event-1',
@@ -38,7 +39,7 @@ describe('loadRecordAudit', () => {
 
   test('localizes safe permission fallbacks using the active UI language', async () => {
     const fetcher: typeof fetch = async () => new Response(null, { status: 403 })
-    const english = (key: MessageKey, values?: MessageValues) => translate('en', key, values)
+    const english = (key: MessageKey, values?: MessageValues) => translateFor('en', key, values)
 
     await expect(loadRecordAudit('record-1', fetcher, english)).rejects.toThrow('Your account does not have the audit.read permission.')
   })
@@ -54,7 +55,7 @@ describe('loadRecordAudit', () => {
       code: 'invalid_query_parameter',
       message: 'Unsupported search field.',
     }, { status: 400 })
-    const english = (key: MessageKey, values?: MessageValues) => translate('en', key, values)
+    const english = (key: MessageKey, values?: MessageValues) => translateFor('en', key, values)
 
     await expect(loadRecordAudit('record-1', fetcher, english))
       .rejects.toThrow('A search or filter field is unsupported. Clear the filters and try again.')

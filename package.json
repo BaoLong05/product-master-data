@@ -5,10 +5,11 @@
   "workspaces": ["frontend"],
   "scripts": {
     "dev:web": "bun run --filter frontend dev",
+    "dev:all": "sh ./scripts/dev-all.sh",
     "build:web": "bun run --filter frontend build",
     "lint:web": "bun run --filter frontend lint",
     "test:web": "bun test frontend/tests",
-    "db:up": "docker compose up -d postgres",
+    "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
     "db:migrate": "dotnet tool run dotnet-ef database update --project src/ProductMasterData.Infrastructure/ProductMasterData.Infrastructure.csproj --startup-project src/ProductMasterData.Api/ProductMasterData.Api.csproj",

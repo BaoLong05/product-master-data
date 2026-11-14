@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   getLocalePreference,
   getThemePreference,
+  loadTranslations,
   translate,
   type Locale,
   type Theme,
   type Translate,
-} from './i18n'
+  type MessageKey,
+} from './localization'
 import { AppPreferencesContext } from './app-preferences-context'
 
 const localeStorageKey = 'product-master-data.locale'
@@ -35,12 +37,32 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }): R
     readStoredPreference(themeStorageKey),
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches === true,
   ))
+  const [translations, setTranslations] = useState<Partial<Record<MessageKey, string>>>({})
   const localeRef = useRef(locale)
+  const translationsRef = useRef(translations)
   const setLocale = useCallback((nextLocale: Locale) => {
     localeRef.current = nextLocale
     setLocaleState(nextLocale)
   }, [])
-  const t = useCallback<Translate>((key, values) => translate(localeRef.current, key, values), [])
+  const t = useCallback<Translate>((key, values) => translate(translationsRef.current, key, values), [])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadTranslations(locale)
+      .then((nextTranslations) => {
+        if (!cancelled) {
+          translationsRef.current = nextTranslations
+          setTranslations(nextTranslations)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          translationsRef.current = {}
+          setTranslations({})
+        }
+      })
+    return () => { cancelled = true }
+  }, [locale])
 
   useLayoutEffect(() => {
     document.documentElement.lang = locale
@@ -52,6 +74,6 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }): R
     storePreference(themeStorageKey, theme)
   }, [locale, theme])
 
-  const value = useMemo(() => ({ locale, theme, setLocale, setTheme, t }), [locale, theme, setLocale, setTheme, t])
+  const value = { locale, theme, setLocale, setTheme, t }
   return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>
 }

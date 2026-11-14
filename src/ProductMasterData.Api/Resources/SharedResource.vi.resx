@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0</value></resheader>
+  <data name="prefs.language" xml:space="preserve"><value>Ngôn ngữ</value></data>
+  <data name="prefs.group" xml:space="preserve"><value>Ngôn ngữ và giao diện</value></data>
+  <data name="prefs.switchToDark" xml:space="preserve"><value>Chuyển sang giao diện tối</value></data>
+  <data name="prefs.switchToLight" xml:space="preserve"><value>Chuyển sang giao diện sáng</value></data>
+  <data name="prefs.light" xml:space="preserve"><value>Sáng</value></data>
+  <data name="prefs.dark" xml:space="preserve"><value>Tối</value></data>
+  <data name="brand.workspace" xml:space="preserve"><value>KHÔNG GIAN DANH MỤC</value></data>
+  <data name="brand.catalogLabel" xml:space="preserve"><value>Product Master Data — danh mục sản phẩm</value></data>
+  <data name="login.storyEyebrow" xml:space="preserve"><value>DỮ LIỆU SẢN PHẨM · 27 TRƯỜNG NGUỒN</value></data>
+  <data name="login.storyTitle" xml:space="preserve"><value>Mọi thông tin sản phẩm, ở đúng một nơi.</value></data>
+  <data name="login.storyDescription" xml:space="preserve"><value>Tìm kiếm trên mọi trường, quản lý hồ sơ và xem trước workbook Excel trong cùng một không gian.</value></data>
+  <data name="login.sourceFields" xml:space="preserve"><value>27 trường dữ liệu nguồn</value></data>
+  <data name="login.catalogManaged" xml:space="preserve"><value>Quản lý danh mục tập trung</value></data>
+  <data name="login.internal" xml:space="preserve"><value>KHU VỰC NỘI BỘ</value></data>
+  <data name="login.title" xml:space="preserve"><value>Đăng nhập</value></data>
+  <data name="login.copy" xml:space="preserve"><value>Dùng thông tin đăng nhập để truy cập không gian dữ liệu.</value></data>
+  <data name="login.username" xml:space="preserve"><value>Tên đăng nhập</value></data>
+  <data name="login.password" xml:space="preserve"><value>Mật khẩu</value></data>
+  <data name="login.busy" xml:space="preserve"><value>Đang đăng nhập…</value></data>
+  <data name="login.submit" xml:space="preserve"><value>Đăng nhập</value></data>
+  <data name="login.footnote" xml:space="preserve"><value>Quyền truy cập được cấp bởi quản trị viên tổ chức.</value></data>
+  <data name="error.csrfInit" xml:space="preserve"><value>Không thể khởi tạo phiên bảo mật. Vui lòng thử lại.</value></data>
+  <data name="error.csrfToken" xml:space="preserve"><value>Không nhận được mã bảo mật từ máy chủ.</value></data>
+  <data name="error.forbidden" xml:space="preserve"><value>Tài khoản không có quyền thực hiện thao tác này.</value></data>
+  <data name="error.httpStatus" xml:space="preserve"><value>Yêu cầu thất bại (HTTP {status}).</value></data>
+  <data name="error.sessionUnavailable" xml:space="preserve"><value>Không thể kiểm tra phiên đăng nhập.</value></data>
+  <data name="error.connection" xml:space="preserve"><value>Không thể kết nối máy chủ. Hãy kiểm tra API đã được khởi động chưa.</value></data>
+  <data name="error.catalogLoad" xml:space="preserve"><value>Không thể tải danh mục sản phẩm.</value></data>
+  <data name="error.importPick" xml:space="preserve"><value>Vui lòng chọn tệp .xlsx để xem trước.</value></data>
+  <data name="error.importRead" xml:space="preserve"><value>Không thể đọc tệp Excel.</value></data>
+  <data name="error.worksheetRequired" xml:space="preserve"><value>Chọn một worksheet trước khi xem dòng mẫu.</value></data>
+  <data name="error.auditLoad" xml:space="preserve"><value>Không thể tải lịch sử kiểm toán.</value></data>
+  <data name="error.loginFailed" xml:space="preserve"><value>Đăng nhập không thành công. Hãy kiểm tra tên đăng nhập và mật khẩu.</value></data>
+  <data name="error.loginSession" xml:space="preserve"><value>Đã tạo phiên nhưng không tải được hồ sơ người dùng.</value></data>
+  <data name="error.loginUnavailable" xml:space="preserve"><value>Không thể đăng nhập.</value></data>
+  <data name="error.logoutUnavailable" xml:space="preserve"><value>Không thể đăng xuất.</value></data>
+  <data name="error.saveFailed" xml:space="preserve"><value>Không thể lưu hồ sơ sản phẩm.</value></data>
+  <data name="error.detailLoad" xml:space="preserve"><value>Không thể tải chi tiết hồ sơ.</value></data>
+  <data name="error.deleteConfirm" xml:space="preserve"><value>Xóa mềm hồ sơ {record}? Hồ sơ sẽ được giữ lại trong lịch sử.</value></data>
+  <data name="error.deleteSuccess" xml:space="preserve"><value>Đã chuyển hồ sơ vào trạng thái đã xóa mềm.</value></data>
+  <data name="error.deleteFailed" xml:space="preserve"><value>Không thể xóa hồ sơ.</value></data>
+  <data name="error.backend.invalidAntiforgeryToken" xml:space="preserve"><value>Phiên bảo mật đã hết hạn hoặc không hợp lệ. Hãy tải lại trang rồi thử lại.</value></data>
+  <data name="error.backend.missingWorkbook" xml:space="preserve"><value>Hãy chọn một tệp Excel .xlsx không rỗng.</value></data>
+  <data name="error.backend.workbookTooLarge" xml:space="preserve"><value>Tệp Excel vượt quá giới hạn 10 MiB.</value></data>
+  <data name="error.backend.unsupportedWorkbookType" xml:space="preserve"><value>Chỉ hỗ trợ tệp Excel định dạng .xlsx.</value></data>
+  <data name="error.backend.invalidWorkbook" xml:space="preserve"><value>Tệp Excel không hợp lệ hoặc không thể đọc.</value></data>
+  <data name="error.backend.missingWorksheet" xml:space="preserve"><value>Hãy chọn chính xác worksheet cần kiểm tra.</value></data>
+  <data name="error.backend.invalidMCodeColumn" xml:space="preserve"><value>Cột nguồn M.CODE đã chọn không tồn tại hoặc không hợp lệ.</value></data>
+  <data name="error.backend.workbookRowLimitExceeded" xml:space="preserve"><value>Worksheet vượt quá giới hạn kiểm tra 10.000 dòng dữ liệu.</value></data>
+  <data name="error.backend.invalidPagination" xml:space="preserve"><value>Thông số trang không hợp lệ. Hãy tải lại danh mục rồi thử lại.</value></data>
+  <data name="error.backend.invalidQueryParameter" xml:space="preserve"><value>Có trường tìm kiếm hoặc bộ lọc không được hỗ trợ. Hãy xóa bộ lọc và thử lại.</value></data>
+  <data name="error.backend.invalidQueryValue" xml:space="preserve"><value>Mỗi trường tìm kiếm hoặc bộ lọc chỉ được gửi một giá trị.</value></data>
+  <data name="error.backend.recordVersionConflict" xml:space="preserve"><value>Hồ sơ đã được thay đổi. Hãy tải lại hồ sơ trước khi lưu hoặc xóa.</value></data>
+  <data name="error.backend.duplicateMCode" xml:space="preserve"><value>M.CODE này đã được sử dụng cho một hồ sơ khác.</value></data>
+  <data name="error.badRequest" xml:space="preserve"><value>Yêu cầu không hợp lệ. Hãy kiểm tra dữ liệu và thử lại.</value></data>
+  <data name="error.unauthorized" xml:space="preserve"><value>Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Hãy đăng nhập lại.</value></data>
+  <data name="error.notFound" xml:space="preserve"><value>Không tìm thấy dữ liệu được yêu cầu.</value></data>
+  <data name="error.conflict" xml:space="preserve"><value>Dữ liệu đang xung đột với trạng thái hiện tại. Hãy tải lại rồi thử lại.</value></data>
+  <data name="error.rateLimited" xml:space="preserve"><value>Bạn đã gửi quá nhiều yêu cầu. Hãy chờ một chút rồi thử lại.</value></data>
+  <data name="notice.saved" xml:space="preserve"><value>Đã lưu hồ sơ sản phẩm.</value></data>
+  <data name="app.catalogEyebrow" xml:space="preserve"><value>DANH MỤC · MASTER DATA</value></data>
+  <data name="app.title" xml:space="preserve"><value>Hồ sơ sản phẩm</value></data>
+  <data name="app.subtitle" xml:space="preserve"><value>Danh sách công ty gọn; chọn một mục để xem toàn bộ thông tin sản phẩm.</value></data>
+  <data name="app.navigation" xml:space="preserve"><value>Điều hướng không gian làm việc</value></data>
+  <data name="app.catalogTab" xml:space="preserve"><value>Danh mục</value></data>
+  <data name="app.importTab" xml:space="preserve"><value>Nhập Excel</value></data>
+  <data name="app.createRecord" xml:space="preserve"><value>Tạo hồ sơ</value></data>
+  <data name="app.createFirst" xml:space="preserve"><value>Tạo hồ sơ đầu tiên</value></data>
+  <data name="app.logout" xml:space="preserve"><value>Đăng xuất</value></data>
+  <data name="app.logoutBusy" xml:space="preserve"><value>Đang đăng xuất…</value></data>
+  <data name="app.footer" xml:space="preserve"><value>Danh mục nội bộ của tổ chức</value></data>
+  <data name="form.editEyebrow" xml:space="preserve"><value>CHỈNH SỬA HỒ SƠ</value></data>
+  <data name="form.newEyebrow" xml:space="preserve"><value>HỒ SƠ MỚI</value></data>
+  <data name="form.title" xml:space="preserve"><value>Thông tin sản phẩm</value></data>
+  <data name="form.close" xml:space="preserve"><value>Đóng</value></data>
+  <data name="form.hint" xml:space="preserve"><value>Tất cả trường đều không bắt buộc. Giá trị được lưu dưới dạng văn bản; M.CODE phải duy nhất nếu được nhập. Khi chỉnh sửa, các trường để trống sẽ được lưu là rỗng.</value></data>
+  <data name="form.cancel" xml:space="preserve"><value>Hủy</value></data>
+  <data name="form.saving" xml:space="preserve"><value>Đang lưu…</value></data>
+  <data name="form.saveChanges" xml:space="preserve"><value>Lưu thay đổi</value></data>
+  <data name="form.save" xml:space="preserve"><value>Lưu hồ sơ</value></data>
+  <data name="field.date" xml:space="preserve"><value>Ngày</value></data>
+  <data name="field.companyName" xml:space="preserve"><value>Tên công ty</value></data>
+  <data name="field.itemName" xml:space="preserve"><value>Tên sản phẩm</value></data>
+  <data name="field.mCode" xml:space="preserve"><value>M.CODE</value></data>
+  <data name="field.itemCode" xml:space="preserve"><value>Mã hàng</value></data>
+  <data name="field.productType" xml:space="preserve"><value>Loại sản phẩm</value></data>
+  <data name="field.productStatus" xml:space="preserve"><value>Trạng thái sản phẩm</value></data>
+  <data name="field.approvalStatus" xml:space="preserve"><value>Trạng thái phê duyệt</value></data>
+  <data name="field.sampleOrProductionOrder" xml:space="preserve"><value>Đơn mẫu / đơn sản xuất</value></data>
+  <data name="field.companyNameLetters" xml:space="preserve"><value>Tên công ty (chữ cái)</value></data>
+  <data name="field.oldRegion" xml:space="preserve"><value>Vùng cũ</value></data>
+  <data name="field.sampleSavedDate" xml:space="preserve"><value>Ngày lưu mẫu</value></data>
+  <data name="field.picImage" xml:space="preserve"><value>Ảnh PIC</value></data>
+  <data name="field.purchaseOrder" xml:space="preserve"><value>Đơn đặt hàng</value></data>
+  <data name="field.productionOrderPdf" xml:space="preserve"><value>PDF đơn sản xuất</value></data>
+  <data name="field.note" xml:space="preserve"><value>Ghi chú</value></data>
+  <data name="field.printedAt" xml:space="preserve"><value>Thời gian in</value></data>
+  <data name="field.discName" xml:space="preserve"><value>Tên đĩa</value></data>
+  <data name="field.soi" xml:space="preserve"><value>SOI</value></data>
+  <data name="field.maso" xml:space="preserve"><value>Mã số</value></data>
+  <data name="field.denier" xml:space="preserve"><value>Denier</value></data>
+  <data name="field.price" xml:space="preserve"><value>Giá</value></data>
+  <data name="field.region" xml:space="preserve"><value>Khu vực</value></data>
+  <data name="field.quantity" xml:space="preserve"><value>Số lượng</value></data>
+  <data name="field.picUrl" xml:space="preserve"><value>URL PIC</value></data>
+  <data name="field.internalItem" xml:space="preserve"><value>Mặt hàng nội bộ</value></data>
+  <data name="field.request" xml:space="preserve"><value>Yêu cầu</value></data>
+  <data name="import.eyebrow" xml:space="preserve"><value>NHẬP DỮ LIỆU · BƯỚC 1</value></data>
+  <data name="import.title" xml:space="preserve"><value>Kiểm tra tệp Excel</value></data>
+  <data name="import.hint" xml:space="preserve"><value>Tải tệp .xlsx để xem tên sheet, tiêu đề cột và tối đa 10 dòng mẫu trong sheet đã chọn. Ô công thức được ẩn; bước này chưa xác thực hoặc nhập hồ sơ.</value></data>
+  <data name="import.selectFile" xml:space="preserve"><value>Chọn tệp Excel .xlsx</value></data>
+  <data name="import.checking" xml:space="preserve"><value>Đang kiểm tra…</value></data>
+  <data name="import.showSheets" xml:space="preserve"><value>Xem sheet và tiêu đề</value></data>
+  <data name="import.worksheet" xml:space="preserve"><value>Worksheet cần xem</value></data>
+  <data name="import.reading" xml:space="preserve"><value>Đang đọc…</value></data>
+  <data name="import.firstRows" xml:space="preserve"><value>Xem 10 dòng đầu</value></data>
+  <data name="import.noHeaders" xml:space="preserve"><value>Không tìm thấy tiêu đề ở hàng đầu tiên.</value></data>
+  <data name="import.rawRowsCaption" xml:space="preserve"><value>Tối đa 10 dòng dữ liệu thô từ worksheet đã chọn</value></data>
+  <data name="import.excelRow" xml:space="preserve"><value>Dòng Excel</value></data>
+  <data name="import.formulaHidden" xml:space="preserve"><value>Công thức bị ẩn</value></data>
+  <data name="import.formulaNote" xml:space="preserve"><value>Giá trị công thức và kết quả lưu sẵn không được hiển thị hoặc đánh giá.</value></data>
+  <data name="import.noRowsAfterHeader" xml:space="preserve"><value>Worksheet không có dòng dữ liệu mẫu sau hàng tiêu đề.</value></data>
+  <data name="import.noRowsForMapping" xml:space="preserve"><value>Worksheet không có dòng dữ liệu mẫu để xem theo ánh xạ.</value></data>
+  <data name="import.headersTitle" xml:space="preserve"><value>Đối chiếu tiêu đề cột</value></data>
+  <data name="import.headersRecognized" xml:space="preserve"><value>{recognized}/{total} tiêu đề nguồn được nhận diện chính xác.</value></data>
+  <data name="import.column" xml:space="preserve"><value>Cột {number}: {header}</value></data>
+  <data name="import.columnFallback" xml:space="preserve"><value>Cột {number}</value></data>
+  <data name="import.blank" xml:space="preserve"><value>(trống)</value></data>
+  <data name="import.recognized" xml:space="preserve"><value>Đã nhận diện</value></data>
+  <data name="import.duplicate" xml:space="preserve"><value>Trùng tiêu đề</value></data>
+  <data name="import.blankHeader" xml:space="preserve"><value>Tiêu đề trống</value></data>
+  <data name="import.unrecognized" xml:space="preserve"><value>Chưa nhận diện</value></data>
+  <data name="import.missingHeaders" xml:space="preserve"><value>Thiếu {count} tiêu đề nguồn</value></data>
+  <data name="import.headersNote" xml:space="preserve"><value>Các tiêu đề được nhận diện chưa tự ánh xạ vào trường dữ liệu. Chưa có xác thực hoặc nhập hồ sơ.</value></data>
+  <data name="import.mappingTitle" xml:space="preserve"><value>Ánh xạ cột tạm thời</value></data>
+  <data name="import.mappingHint" xml:space="preserve"><value>Chọn trường đích cho từng cột; không có lựa chọn nào được điền sẵn. Mỗi trường chỉ ánh xạ với một cột. Lựa chọn chỉ được lưu tạm trong màn hình này, chưa gửi hoặc nhập dữ liệu.</value></data>
+  <data name="import.mappingNone" xml:space="preserve"><value>Chưa ánh xạ cột nào.</value></data>
+  <data name="import.mappingCount" xml:space="preserve"><value>{count} cột được ánh xạ tạm thời.</value></data>
+  <data name="import.mappingFieldLabel" xml:space="preserve"><value>Cột {number}: {header} → trường hồ sơ</value></data>
+  <data name="import.noMapping" xml:space="preserve"><value>Không ánh xạ</value></data>
+  <data name="import.mappingSampleHint" xml:space="preserve"><value>Xem tối đa 10 dòng đầu để kiểm tra dữ liệu theo ánh xạ.</value></data>
+  <data name="import.mappedPreviewTitle" xml:space="preserve"><value>Dữ liệu theo ánh xạ (chưa xác thực hoặc nhập)</value></data>
+  <data name="import.mappedPreviewCaption" xml:space="preserve"><value>Tối đa 10 dòng mẫu, sắp theo trường đích đã chọn; không được xác thực hoặc nhập</value></data>
+  <data name="import.rowPreviewTitle" xml:space="preserve"><value>Dòng mẫu — {sheet}</value></data>
+  <data name="import.validateMCode" xml:space="preserve"><value>Kiểm tra trùng M.CODE</value></data>
+  <data name="import.validatingMCode" xml:space="preserve"><value>Đang kiểm tra M.CODE…</value></data>
+  <data name="import.validationSummary" xml:space="preserve"><value>Đã kiểm tra {scanned} dòng · {duplicates} dòng trùng M.CODE</value></data>
+  <data name="import.duplicateAtRow" xml:space="preserve"><value>M.CODE trùng tại dòng Excel {row}</value></data>
+  <data name="import.validationNote" xml:space="preserve"><value>Chỉ kiểm tra M.CODE trùng; chưa xác thực đầy đủ hoặc nhập dữ liệu.</value></data>
+  <data name="import.commitTitle" xml:space="preserve"><value>Kết quả nhập Excel</value></data>
+  <data name="import.commitSummary" xml:space="preserve"><value>Đã nhập {imported} / {scanned} dòng · Bỏ qua {skipped} dòng</value></data>
+  <data name="import.commitFile" xml:space="preserve"><value>Tệp: {file}</value></data>
+  <data name="import.commitReplay" xml:space="preserve"><value>Yêu cầu trùng lặp — đã trả lại kết quả của lần nhập trước</value></data>
+  <data name="import.commitAction" xml:space="preserve"><value>Xác nhận nhập các dòng đã ánh xạ</value></data>
+  <data name="import.commitBusy" xml:space="preserve"><value>Đang nhập…</value></data>
+  <data name="import.confirmCommit" xml:space="preserve"><value>Nhập các dòng trong {file}? Tối đa 10.000 dòng dữ liệu sẽ được quét. M.CODE trùng sẽ bị bỏ qua; dữ liệu hiện có không bị ghi đè.</value></data>
+  <data name="import.mappingRequired" xml:space="preserve"><value>Hãy ánh xạ ít nhất một cột trước khi nhập.</value></data>
+  <data name="import.historyTitle" xml:space="preserve"><value>Lịch sử nhập Excel</value></data>
+  <data name="import.historyRefresh" xml:space="preserve"><value>Tải lịch sử</value></data>
+  <data name="import.historyRefreshing" xml:space="preserve"><value>Đang tải…</value></data>
+  <data name="import.historyLoading" xml:space="preserve"><value>Đang tải lịch sử nhập…</value></data>
+  <data name="import.historyEmpty" xml:space="preserve"><value>Chưa có lần nhập nào.</value></data>
+  <data name="import.historyPermissionHint" xml:space="preserve"><value>API kiểm tra quyền imports.read để xem lịch sử; giao diện không tự giả định quyền.</value></data>
+  <data name="import.historySelect" xml:space="preserve"><value>Xem chi tiết lần nhập tệp {file}</value></data>
+  <data name="import.historyDetail" xml:space="preserve"><value>Chi tiết lần nhập: {file}</value></data>
+  <data name="import.unknownIssue" xml:space="preserve"><value>Dòng Excel {row}: không thể nhập dòng này.</value></data>
+  <data name="error.backend.invalidColumnMapping" xml:space="preserve"><value>Ánh xạ cột không hợp lệ. Hãy kiểm tra ánh xạ rồi thử lại.</value></data>
+  <data name="error.backend.importCommitConflict" xml:space="preserve"><value>Không thể hoàn tất an toàn lần nhập. Hãy gửi lại cùng workbook để nhận kết quả trước đó.</value></data>
+  <data name="error.backend.importDuplicateConflict" xml:space="preserve"><value>M.CODE vừa được tạo trong lúc nhập. Không có dòng nào được ghi; hãy chạy lại để xem các dòng trùng.</value></data>
+  <data name="error.backend.invalidPageSize" xml:space="preserve"><value>Số lượng mục lịch sử phải từ 1 đến 100.</value></data>
+  <data name="catalog.title" xml:space="preserve"><value>Danh sách công ty</value></data>
+  <data name="catalog.detailBack" xml:space="preserve"><value>Quay lại danh sách công ty</value></data>
+  <data name="catalog.detailLoading" xml:space="preserve"><value>Đang tải chi tiết hồ sơ…</value></data>
+  <data name="catalog.noCompanyName" xml:space="preserve"><value>Chưa có tên công ty</value></data>
+  <data name="catalog.noItemName" xml:space="preserve"><value>Chưa có tên sản phẩm</value></data>
+  <data name="catalog.noPicImage" xml:space="preserve"><value>Chưa có ảnh PIC</value></data>
+  <data name="catalog.itemCount" xml:space="preserve"><value>{count} sản phẩm</value></data>
+  <data name="catalog.totalCount" xml:space="preserve"><value>{count} hồ sơ</value></data>
+  <data name="catalog.loading" xml:space="preserve"><value>Đang tải danh mục…</value></data>
+  <data name="catalog.page" xml:space="preserve"><value>Trang {page}/{total}</value></data>
+  <data name="catalog.searchLabel" xml:space="preserve"><value>Tìm kiếm trên tất cả trường dữ liệu</value></data>
+  <data name="catalog.searchPlaceholder" xml:space="preserve"><value>Tìm trong 27 trường dữ liệu…</value></data>
+  <data name="catalog.filter" xml:space="preserve"><value>Bộ lọc</value></data>
+  <data name="catalog.search" xml:space="preserve"><value>Tìm kiếm</value></data>
+  <data name="catalog.searchHint" xml:space="preserve"><value>Tìm kiếm không phân biệt hoa/thường; có thể lọc riêng từng trường.</value></data>
+  <data name="catalog.clearFilters" xml:space="preserve"><value>Xóa bộ lọc</value></data>
+  <data name="catalog.applyFilters" xml:space="preserve"><value>Áp dụng lọc</value></data>
+  <data name="catalog.edit" xml:space="preserve"><value>Sửa</value></data>
+  <data name="catalog.delete" xml:space="preserve"><value>Xóa</value></data>
+  <data name="catalog.audit" xml:space="preserve"><value>Lịch sử</value></data>
+  <data name="catalog.hideAudit" xml:space="preserve"><value>Ẩn</value></data>
+  <data name="catalog.showAudit" xml:space="preserve"><value>Xem</value></data>
+  <data name="catalog.noMatches" xml:space="preserve"><value>Không tìm thấy hồ sơ phù hợp</value></data>
+  <data name="catalog.emptyTitle" xml:space="preserve"><value>Danh mục chưa có dữ liệu</value></data>
+  <data name="catalog.emptySearch" xml:space="preserve"><value>Thử thay đổi từ khóa hoặc bộ lọc để tìm hồ sơ.</value></data>
+  <data name="catalog.emptyCatalog" xml:space="preserve"><value>Tạo hồ sơ đầu tiên để bắt đầu quản lý danh mục sản phẩm.</value></data>
+  <data name="catalog.clearSearch" xml:space="preserve"><value>Xóa tìm kiếm và bộ lọc</value></data>
+  <data name="catalog.loadingRecords" xml:space="preserve"><value>Đang tải hồ sơ…</value></data>
+  <data name="catalog.showing" xml:space="preserve"><value>Đang hiển thị {shown}/{total}</value></data>
+  <data name="catalog.previous" xml:space="preserve"><value>Trước</value></data>
+  <data name="catalog.next" xml:space="preserve"><value>Sau</value></data>
+  <data name="audit.eyebrow" xml:space="preserve"><value>LỊCH SỬ HỒ SƠ</value></data>
+  <data name="audit.title" xml:space="preserve"><value>Lịch sử kiểm toán — {record}</value></data>
+  <data name="audit.close" xml:space="preserve"><value>Đóng lịch sử kiểm toán</value></data>
+  <data name="audit.permission" xml:space="preserve"><value>API kiểm tra quyền audit.read; quyền truy cập không được suy đoán ở giao diện.</value></data>
+  <data name="audit.noPermission" xml:space="preserve"><value>Tài khoản không có quyền xem lịch sử kiểm toán (audit.read).</value></data>
+  <data name="audit.invalidResponse" xml:space="preserve"><value>Phản hồi lịch sử kiểm toán không đúng định dạng.</value></data>
+  <data name="audit.loading" xml:space="preserve"><value>Đang tải lịch sử kiểm toán…</value></data>
+  <data name="audit.empty" xml:space="preserve"><value>Chưa có sự kiện kiểm toán cho hồ sơ này.</value></data>
+  <data name="audit.actionCreated" xml:space="preserve"><value>Tạo hồ sơ</value></data>
+  <data name="audit.actionUpdated" xml:space="preserve"><value>Cập nhật hồ sơ</value></data>
+  <data name="audit.actionDeleted" xml:space="preserve"><value>Xóa mềm hồ sơ</value></data>
+  <data name="audit.succeeded" xml:space="preserve"><value>Thành công</value></data>
+  <data name="audit.failed" xml:space="preserve"><value>Thất bại</value></data>
+  <data name="audit.actor" xml:space="preserve"><value>Người thực hiện</value></data>
+  <data name="audit.system" xml:space="preserve"><value>Hệ thống</value></data>
+  <data name="audit.correlation" xml:space="preserve"><value>Mã tương quan</value></data>
+  <data name="audit.target" xml:space="preserve"><value>Đối tượng</value></data>
+  <data name="audit.metadata" xml:space="preserve"><value>Metadata an toàn</value></data>
+</root>

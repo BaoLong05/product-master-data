@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import { translate, type Locale, type Theme, type Translate, type MessageKey, type MessageValues } from './i18n'
+import { translate, type Locale, type Theme, type Translate, type MessageKey, type MessageValues } from './localization'
 
 export interface AppPreferencesValue {
   locale: Locale
@@ -14,7 +14,7 @@ const defaultPreferences: AppPreferencesValue = {
   theme: 'light',
   setLocale: () => undefined,
   setTheme: () => undefined,
-  t: (key: MessageKey, values?: MessageValues) => translate('vi', key, values),
+  t: (key: MessageKey, values?: MessageValues) => translate({}, key, values),
 }
 
 export const AppPreferencesContext = createContext(defaultPreferences)

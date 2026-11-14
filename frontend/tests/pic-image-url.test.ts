@@ -11,6 +11,10 @@ it('accepts only safe external HTTPS PIC images and falls back to the PIC URL fi
 
   expect(module.resolvePicImageUrl('https://cdn.example.com/pic.png', 'https://other.example/pic.png'))
     .toBe('https://cdn.example.com/pic.png')
+  expect(module.resolvePicImageUrl('https://drive.google.com/file/d/abc123/view?usp=drivesdk', null))
+    .toBe('https://drive.google.com/thumbnail?id=abc123&sz=w1600')
+  expect(module.resolvePicImageUrl(null, 'https://drive.google.com/open?id=abc123'))
+    .toBe('https://drive.google.com/thumbnail?id=abc123&sz=w1600')
   expect(module.resolvePicImageUrl('not-an-image-url', 'https://cdn.example.com/fallback.png'))
     .toBe('https://cdn.example.com/fallback.png')
   for (const unsafe of [

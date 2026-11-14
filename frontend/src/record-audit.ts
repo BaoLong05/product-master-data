@@ -1,4 +1,4 @@
-import { translate, type Translate } from './i18n'
+import { translate, type Translate } from './localization'
 import { localizeApiError } from './api-errors'
 
 export type ProductRecordAuditEvent = {
@@ -15,7 +15,7 @@ export type ProductRecordAuditEvent = {
 export async function loadRecordAudit(
   recordId: string,
   fetcher: typeof fetch = fetch,
-  t: Translate = (key, values) => translate('vi', key, values),
+  t: Translate = (key, values) => translate({}, key, values),
 ): Promise<ProductRecordAuditEvent[]> {
   const response = await fetcher(`/api/v1/records/${encodeURIComponent(recordId)}/audit`, {
     credentials: 'same-origin',

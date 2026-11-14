@@ -51,6 +51,8 @@ public static class ProductRecordEndpoints
         var records = endpoints.MapGroup("/api/v1/records").WithTags("Product records");
         records.MapGet("", ListAsync)
             .RequireAuthorization(PermissionPolicies.For("records.read"));
+        records.MapGet("/customers", ListCustomersAsync)
+            .RequireAuthorization(PermissionPolicies.For("records.read"));
         records.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetProductRecord")
             .RequireAuthorization(PermissionPolicies.For("records.read"));
@@ -65,6 +67,97 @@ public static class ProductRecordEndpoints
         return endpoints;
     }
 
+    private static IResult? ValidatePagination(int page, int pageSize)
+    {
+        return page < 1 || pageSize is < 1 or > 100
+            ? Results.BadRequest(new ApiErrorResponse("invalid_pagination", "Page must be positive and pageSize must be between 1 and 100."))
+            : null;
+    }
+
+    private static async Task<IResult> ListCustomersAsync(
+        ProductMasterDataDbContext database,
+        CancellationToken cancellationToken,
+        int page = 1,
+        int pageSize = 50,
+        string? q = null)
+    {
+        var paginationError = ValidatePagination(page, pageSize);
+        if (paginationError is not null)
+        {
+            return paginationError;
+        }
+
+        var records = database.ProductRecords
+            .AsNoTracking()
+            .Where(record => !record.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var query = q.Trim().ToLowerInvariant();
+            records = records.Where(record => record.CompanyName != null && record.CompanyName.ToLower().Contains(query));
+        }
+
+        if (!database.Database.IsRelational())
+        {
+            return await ListCustomersInMemoryAsync(records, page, pageSize, cancellationToken);
+        }
+
+        var groupedQuery = records
+            .GroupBy(record => record.CompanyName ?? string.Empty)
+            .Select(group => new { Name = group.Key, ItemCount = group.Count() });
+        var totalCount = await groupedQuery.CountAsync(cancellationToken);
+        var customerPage = totalCount == 0
+            ? []
+            : await groupedQuery
+                .OrderBy(customer => customer.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+        var customerNames = customerPage.Select(customer => customer.Name).ToArray();
+        var representatives = customerNames.Length == 0
+            ? []
+            : await records
+                .Where(record => customerNames.Contains(record.CompanyName ?? string.Empty))
+                .Where(record => !string.IsNullOrWhiteSpace(record.PicImage) || !string.IsNullOrWhiteSpace(record.PicUrl))
+                .OrderBy(record => record.CompanyName)
+                .ThenByDescending(record => record.UpdatedAt)
+                .ThenBy(record => record.Id)
+                .Select(record => new { record.CompanyName, record.PicImage, record.PicUrl })
+                .ToListAsync(cancellationToken);
+        var representativeByCustomer = representatives
+            .GroupBy(record => string.IsNullOrEmpty(record.CompanyName) ? string.Empty : record.CompanyName, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var items = customerPage
+            .Select(customer => representativeByCustomer.TryGetValue(customer.Name, out var representative)
+                ? new ProductCustomerListItemResponse(customer.Name, customer.ItemCount, representative.PicImage, representative.PicUrl)
+                : new ProductCustomerListItemResponse(customer.Name, customer.ItemCount, null, null))
+            .ToList();
+
+        return Results.Ok(new ProductCustomerPageResponse(items, page, pageSize, totalCount));
+    }
+
+    private static async Task<IResult> ListCustomersInMemoryAsync(
+        IQueryable<ProductRecord> records,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var projectedRecords = await records
+            .Select(record => new { record.CompanyName, record.PicImage, record.PicUrl })
+            .ToListAsync(cancellationToken);
+        var grouped = projectedRecords
+            .GroupBy(record => record.CompanyName ?? string.Empty, StringComparer.Ordinal)
+            .OrderBy(group => group.Key)
+            .Select(group => new ProductCustomerListItemResponse(
+                group.Key,
+                group.Count(),
+                group.FirstOrDefault(record => !string.IsNullOrWhiteSpace(record.PicImage))?.PicImage,
+                group.FirstOrDefault(record => !string.IsNullOrWhiteSpace(record.PicUrl))?.PicUrl))
+            .ToList();
+        var totalCount = grouped.Count;
+        var items = grouped.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return Results.Ok(new ProductCustomerPageResponse(items, page, pageSize, totalCount));
+    }
+
     private static async Task<IResult> ListAsync(
         ProductMasterDataDbContext database,
         HttpRequest httpRequest,
@@ -73,13 +166,15 @@ public static class ProductRecordEndpoints
         int pageSize = 50,
         string? q = null)
     {
-        if (page < 1 || pageSize is < 1 or > 100)
+        var paginationError = ValidatePagination(page, pageSize);
+        if (paginationError is not null)
         {
-            return Results.BadRequest(new ApiErrorResponse("invalid_pagination", "Page must be positive and pageSize must be between 1 and 100."));
+            return paginationError;
         }
 
         var allowedQueryKeys = SourceFields.Keys
             .Append("q")
+            .Append("companyNameExact")
             .Append("page")
             .Append("pageSize")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -97,6 +192,11 @@ public static class ProductRecordEndpoints
         if (!string.IsNullOrEmpty(q))
         {
             activeRecords = activeRecords.Where(BuildSearchPredicate(q));
+        }
+
+        if (httpRequest.Query.TryGetValue("companyNameExact", out var exactCompanyName))
+        {
+            activeRecords = activeRecords.Where(record => record.CompanyName == exactCompanyName[0]);
         }
 
         foreach (var (queryName, propertyName) in SourceFields)
@@ -119,6 +219,9 @@ public static class ProductRecordEndpoints
                 .Select(record => new ProductRecordListItemResponse(
                     record.Id,
                     record.CompanyName,
+                    record.ItemName,
+                    record.ItemCode,
+                    record.MCode,
                     record.PicImage,
                     record.PicUrl))
                 .ToListAsync(cancellationToken);
@@ -580,8 +683,23 @@ public sealed record ProductRecordResponse(
 public sealed record ProductRecordListItemResponse(
     Guid Id,
     string? CompanyName,
+    string? ItemName,
+    string? ItemCode,
+    string? MCode,
     string? PicImage,
     string? PicUrl);
+
+public sealed record ProductCustomerListItemResponse(
+    string Name,
+    int ItemCount,
+    string? PicImage,
+    string? PicUrl);
+
+public sealed record ProductCustomerPageResponse(
+    IReadOnlyList<ProductCustomerListItemResponse> Items,
+    int Page,
+    int PageSize,
+    int TotalCount);
 
 public sealed record ProductRecordPageResponse(
     IReadOnlyList<ProductRecordListItemResponse> Items,

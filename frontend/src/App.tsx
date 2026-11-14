@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { buildCatalogQuery } from './catalog-search'
-import { CatalogRecordCard, CatalogRecordDetail, type CatalogCardRecord } from './catalog-cards'
+import { CatalogCustomerCard, CatalogItemCard, CatalogRecordDetail, type CatalogCardRecord, type CatalogCustomer } from './catalog-cards'
 import { createRecordDetailRequestGuard } from './record-detail-request'
 import { WorkspaceNavigation, WorkspacePanel } from './workspace-navigation'
 import { ImportColumnMapping as ImportColumnMappingView } from './import-column-mapping-view'
@@ -15,7 +15,8 @@ import { AppPreferencesProvider } from './app-preferences'
 import { PreferenceControls } from './preference-controls'
 import { useAppPreferences } from './use-app-preferences'
 import { localizeApiError } from './api-errors'
-import { formatLocaleNumber, type MessageKey, type Translate } from './i18n'
+import { formatLocaleNumber, type MessageKey, type Translate } from './localization'
+import { appPaths, navigate, parseRoute, type AppRoute } from './router'
 import './App.css'
 
 type CurrentIdentity = { userId: string | null; email: string | null }
@@ -51,6 +52,12 @@ type ProductRecordForm = {
 type ProductRecordListItem = CatalogCardRecord
 type ProductRecordPage = {
   items: ProductRecordListItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+type CustomerPage = {
+  items: CatalogCustomer[]
   page: number
   pageSize: number
   totalCount: number
@@ -131,12 +138,15 @@ function AppContent() {
   const { locale, t } = useAppPreferences()
   const localizedFormFields = formFields.map((field) => ({ ...field, label: t(formFieldLabels[field.key]) }))
   const [identity, setIdentity] = useState<CurrentIdentity | null>(null)
+  const [route, setRoute] = useState<AppRoute>(() => parseRoute())
   const [loginBusy, setLoginBusy] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [sessionError, setSessionError] = useState('')
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
   const [recordPage, setRecordPage] = useState<ProductRecordPage | null>(null)
+  const [customerPage, setCustomerPage] = useState<CustomerPage | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null)
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<'catalog' | 'import'>('catalog')
   const [selectedRecord, setSelectedRecord] = useState<ProductRecordDetail | null>(null)
   const [recordDetailBusy, setRecordDetailBusy] = useState(false)
@@ -197,21 +207,45 @@ function AppContent() {
   }, [t])
 
   useEffect(() => {
+    const handlePopState = () => setRoute(parseRoute())
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    if (!identity && route.kind !== 'login' && !sessionError) {
+      navigate(appPaths.login(), true)
+      return
+    }
+    if (identity && route.kind === 'login') {
+      navigate(appPaths.catalog(), true)
+    }
+  }, [identity, route.kind, sessionError])
+
+  useEffect(() => {
     if (!identity) return
     let cancelled = false
     const controller = new AbortController()
-    const loadRecords = async () => {
+    const loadCatalog = async () => {
       setListBusy(true)
       setListError('')
       try {
-        const query = buildCatalogQuery(page, pageSize, searchTerm, filters)
-        const response = await fetch(`/api/v1/records${query}`, {
+        const isCustomerSelected = selectedCustomer !== null
+        const query = isCustomerSelected
+          ? buildCatalogQuery(page, pageSize, searchTerm, { ...filters, companyNameExact: selectedCustomer })
+          : buildCatalogQuery(page, pageSize, searchTerm, {})
+        const response = await fetch(`/api/v1/records${isCustomerSelected ? query : `/customers${query}`}`, {
           credentials: 'same-origin',
           signal: controller.signal,
         })
         if (!response.ok) throw new Error(await responseMessage(response, t))
-        const result = await response.json() as ProductRecordPage
-        if (!cancelled) setRecordPage(result)
+        if (selectedCustomer) {
+          const result = await response.json() as ProductRecordPage
+          if (!cancelled) setRecordPage(result)
+        } else {
+          const result = await response.json() as CustomerPage
+          if (!cancelled) setCustomerPage(result)
+        }
       } catch (error) {
         if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
           setListError(error instanceof Error ? error.message : t('error.catalogLoad'))
@@ -220,16 +254,18 @@ function AppContent() {
         if (!cancelled) setListBusy(false)
       }
     }
-    void loadRecords()
+    void loadCatalog()
     return () => {
       cancelled = true
       controller.abort()
     }
-  }, [identity, page, listVersion, searchTerm, filters, t])
+  }, [identity, page, listVersion, searchTerm, selectedCustomer, filters, t])
 
   const handleApplySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     closeAuditPanel()
+    setSelectedCustomer(null)
+    setRecordPage(null)
     setPage(1)
     setSearchTerm(searchDraft)
     setFilters(filtersDraft)
@@ -237,6 +273,8 @@ function AppContent() {
 
   const handleClearSearch = () => {
     closeAuditPanel()
+    setSelectedCustomer(null)
+    setRecordPage(null)
     setSearchDraft('')
     setSearchTerm('')
     setFiltersDraft(emptyForm())
@@ -455,6 +493,7 @@ function AppContent() {
       const identityResponse = await fetch('/api/v1/auth/me', { credentials: 'same-origin' })
       if (!identityResponse.ok) throw new Error(t('error.loginSession'))
       setIdentity(await identityResponse.json() as CurrentIdentity)
+      navigate(appPaths.catalog(), true)
       setPassword('')
       setSessionError('')
     } catch (error) {
@@ -500,12 +539,15 @@ function AppContent() {
       setActiveWorkspaceView('catalog')
       setIdentity(null)
       setRecordPage(null)
+      setCustomerPage(null)
+      setSelectedCustomer(null)
       setFormOpen(false)
       setEditingRecord(null)
       setForm(emptyForm())
       handleClearSearch()
       setFiltersOpen(false)
       setSessionError('')
+      navigate(appPaths.login(), true)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('error.logoutUnavailable'))
     } finally {
@@ -533,6 +575,7 @@ function AppContent() {
       setPage(1)
       setListVersion((version) => version + 1)
       setNotice(t('notice.saved'))
+      navigate(selectedCustomer ? appPaths.customer(selectedCustomer) : appPaths.catalog())
     } catch (error) {
       setFormError(error instanceof Error ? error.message : t('error.saveFailed'))
     } finally {
@@ -560,12 +603,54 @@ function AppContent() {
     }
   }
 
+  useEffect(() => {
+    if (!identity || route.kind === 'login') return
+    if (route.kind === 'import') {
+      // oxlint-disable-next-line react/set-state-in-effect
+      setActiveWorkspaceView('import')
+      setSelectedCustomer(null)
+      setSelectedRecord(null)
+      setRecordPage(null)
+      setFormOpen(false)
+      if (route.batchId && route.batchId !== selectedImportBatchId) void handleSelectImportBatch(route.batchId)
+      return
+    }
+    setActiveWorkspaceView('catalog')
+    if (route.kind === 'create') {
+      setSelectedCustomer(null)
+      setSelectedRecord(null)
+      setRecordPage(null)
+      setEditingRecord(null)
+      setFormError('')
+      setForm(emptyForm())
+      setFormOpen(true)
+      return
+    }
+    if (route.kind === 'catalog') {
+      setFormOpen(false)
+      setSelectedCustomer(null)
+      setSelectedRecord(null)
+      setRecordPage(null)
+      setPage(1)
+      return
+    }
+    setSelectedCustomer(route.customerName)
+    setPage(1)
+    if (route.kind === 'customer') {
+      setSelectedRecord(null)
+      return
+    }
+    if (!selectedRecord || selectedRecord.id !== route.recordId) void handleOpenRecordDetail(route.recordId)
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, route, selectedImportBatchId, selectedRecord])
+
   const handleCloseRecordDetail = () => {
     recordDetailRequestGuard.current.invalidate()
     setSelectedRecord(null)
     setRecordDetailBusy(false)
     setRecordDetailError('')
     closeAuditPanel()
+    navigate(selectedCustomer ? appPaths.customer(selectedCustomer) : appPaths.catalog())
   }
 
   const handleEdit = (record: ProductRecordDetail) => {
@@ -607,8 +692,8 @@ function AppContent() {
         <div className="login-layout">
           <section className="login-story" aria-labelledby="login-story-title">
             <div className="login-story-brand">
-              <span className="login-story-mark" aria-hidden="true">PM</span>
-              <span className="login-story-wordmark"><strong>Product Master Data</strong><small>{t('brand.workspace')}</small></span>
+              <span className="login-story-mark" aria-hidden="true">GS</span>
+              <span className="login-story-wordmark"><strong>Glory - Sample Library</strong><small>{t('brand.workspace')}</small></span>
             </div>
             <div className="login-story-copy">
               <p className="eyebrow">{t('login.storyEyebrow')}</p>
@@ -663,17 +748,18 @@ function AppContent() {
     )
   }
 
-  const totalPages = Math.max(1, Math.ceil((recordPage?.totalCount ?? 0) / pageSize))
-  const activeFilterCount = formFields.filter(({ key }) => filters[key].trim()).length
+  const activePage = selectedCustomer !== null ? recordPage : customerPage
+  const totalPages = Math.max(1, Math.ceil((activePage?.totalCount ?? 0) / pageSize))
+  const activeFilterCount = selectedCustomer !== null ? formFields.filter(({ key }) => filters[key].trim()).length : 0
   const hasActiveSearch = Boolean(searchTerm.trim() || activeFilterCount)
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#catalog" aria-label={t('brand.catalogLabel')}>
-          <span className="brand-mark" aria-hidden="true">PM</span>
-          <span><strong>Product Master Data</strong><small>{t('brand.workspace')}</small></span>
-        </a>
+          <a className="brand" href={appPaths.catalog()} onClick={(event) => { event.preventDefault(); navigate(appPaths.catalog()) }} aria-label="Glory - Sample Library">
+            <span className="brand-mark" aria-hidden="true">GS</span>
+            <span><strong>Glory - Sample Library</strong><small>{t('brand.workspace')}</small></span>
+          </a>
         <div className="topbar-actions">
           <PreferenceControls />
           <span className="user-email">{identity.email ?? identity.userId}</span>
@@ -691,7 +777,7 @@ function AppContent() {
             <p className="page-subtitle">{t('app.subtitle')}</p>
           </div>
           {activeWorkspaceView === 'catalog' && !selectedRecord && (
-            <button className="button button-primary" type="button" onClick={() => { setFormError(''); setEditingRecord(null); setForm(emptyForm()); setFormOpen((open) => !open) }}>
+            <button className="button button-primary" type="button" onClick={() => navigate(appPaths.create())}>
               <span aria-hidden="true">＋</span> {t('app.createRecord')}
             </button>
           )}
@@ -700,7 +786,14 @@ function AppContent() {
         <WorkspaceNavigation
           activeView={activeWorkspaceView}
           labels={{ navigation: t('app.navigation'), catalog: t('app.catalogTab'), import: t('app.importTab') }}
-          onSelect={setActiveWorkspaceView}
+          onSelect={(view) => {
+            setActiveWorkspaceView(view)
+            navigate(view === 'import'
+              ? appPaths.import()
+              : selectedCustomer
+                ? appPaths.customer(selectedCustomer)
+                : appPaths.catalog())
+          }}
         />
 
         {notice && <p className="alert alert-success" role="status">{notice}</p>}
@@ -709,7 +802,7 @@ function AppContent() {
           <section className="form-card" aria-labelledby="form-title">
             <div className="section-heading">
               <div><p className="eyebrow">{editingRecord ? t('form.editEyebrow') : t('form.newEyebrow')}</p><h2 id="form-title">{t('form.title')}</h2></div>
-              <button className="button button-quiet" type="button" onClick={() => { setFormOpen(false); setEditingRecord(null) }}>{t('form.close')}</button>
+              <button className="button button-quiet" type="button" onClick={() => { setFormOpen(false); setEditingRecord(null); navigate(selectedCustomer ? appPaths.customer(selectedCustomer) : appPaths.catalog()) }}>{t('form.close')}</button>
             </div>
             <p className="form-hint">{t('form.hint')}</p>
             {formError && <p className="alert alert-error" role="alert">{formError}</p>}
@@ -727,7 +820,7 @@ function AppContent() {
                 ))}
               </div>
               <div className="form-actions">
-                <button className="button button-quiet" type="button" onClick={() => { setFormOpen(false); setEditingRecord(null) }}>{t('form.cancel')}</button>
+                <button className="button button-quiet" type="button" onClick={() => { setFormOpen(false); setEditingRecord(null); navigate(selectedCustomer ? appPaths.customer(selectedCustomer) : appPaths.catalog()) }}>{t('form.cancel')}</button>
                 <button className="button button-primary" type="submit" disabled={saveBusy}>{saveBusy ? t('form.saving') : editingRecord ? t('form.saveChanges') : t('form.save')}</button>
               </div>
             </form>
@@ -847,7 +940,7 @@ function AppContent() {
           locale={locale}
           t={t}
           onRefresh={() => void loadImportHistory()}
-          onSelect={(batchId) => void handleSelectImportBatch(batchId)}
+          onSelect={(batchId) => navigate(appPaths.importHistory(batchId))}
         />
         </WorkspacePanel>
 
@@ -899,8 +992,11 @@ function AppContent() {
           {!recordDetailBusy && !recordDetailError && !selectedRecord && (
             <>
               <div className="catalog-toolbar">
-                <div><h2 id="records-title">{t('catalog.title')}</h2><p>{recordPage ? t('catalog.totalCount', { count: formatLocaleNumber(locale, recordPage.totalCount) }) : t('catalog.loading')}</p></div>
-                <span className="page-indicator">{t('catalog.page', { page: formatLocaleNumber(locale, page), total: formatLocaleNumber(locale, totalPages) })}</span>
+                <div><h2 id="records-title">{selectedCustomer !== null ? (selectedCustomer || t('catalog.noCompanyName')) : t('catalog.title')}</h2><p>{activePage ? t('catalog.totalCount', { count: formatLocaleNumber(locale, activePage.totalCount) }) : t('catalog.loading')}</p></div>
+                <div className="catalog-toolbar-actions">
+                  {selectedCustomer !== null && <button className="button button-quiet" type="button" onClick={() => navigate(appPaths.catalog())}>{t('catalog.detailBack')}</button>}
+                  <span className="page-indicator">{t('catalog.page', { page: formatLocaleNumber(locale, page), total: formatLocaleNumber(locale, totalPages) })}</span>
+                </div>
               </div>
               {listError && <p className="alert alert-error" role="alert">{listError}</p>}
               <form className="catalog-search" onSubmit={handleApplySearch}>
@@ -913,7 +1009,7 @@ function AppContent() {
                     value={searchDraft}
                     onChange={(event) => setSearchDraft(event.target.value)}
                   />
-                  <button
+                  {selectedCustomer !== null && <button
                     className="button button-quiet"
                     type="button"
                     aria-expanded={filtersOpen}
@@ -921,11 +1017,11 @@ function AppContent() {
                     onClick={() => setFiltersOpen((open) => !open)}
                   >
                     {t('catalog.filter')}{activeFilterCount ? ` (${formatLocaleNumber(locale, activeFilterCount)})` : ''}
-                  </button>
+                  </button>}
                   <button className="button button-primary" type="submit">{t('catalog.search')}</button>
                 </div>
                 <p className="search-hint">{t('catalog.searchHint')}</p>
-                {filtersOpen && (
+                {selectedCustomer !== null && filtersOpen && (
                   <div className="field-filters" id="catalog-field-filters">
                     {localizedFormFields.map(({ key, label }) => (
                       <div className="filter-field" key={key}>
@@ -946,22 +1042,33 @@ function AppContent() {
                 )}
               </form>
               <div className="catalog-record-grid" aria-busy={listBusy}>
-                {recordPage?.items.map((record) => (
-                  <CatalogRecordCard
+                {selectedCustomer === null && customerPage?.items.map((customer) => (
+                  <CatalogCustomerCard
+                    key={customer.name}
+                    customer={customer}
+                    itemCountLabel={(count) => t('catalog.itemCount', { count: formatLocaleNumber(locale, count) })}
+                    noImageLabel={t('catalog.noPicImage')}
+                    noCompanyLabel={t('catalog.noCompanyName')}
+                    onSelect={(name) => navigate(appPaths.customer(name))}
+                  />
+                ))}
+                {selectedCustomer !== null && recordPage?.items.map((record) => (
+                  <CatalogItemCard
                     key={record.id}
                     record={record}
                     noCompanyLabel={t('catalog.noCompanyName')}
+                    noItemLabel={t('catalog.noItemName')}
                     noImageLabel={t('catalog.noPicImage')}
-                    onSelect={(id) => void handleOpenRecordDetail(id)}
+                    onSelect={(id) => navigate(appPaths.record(selectedCustomer ?? '', id))}
                   />
                 ))}
-                {!listBusy && recordPage?.items.length === 0 && (
+                {!listBusy && activePage?.items.length === 0 && (
                   <div className="empty-state"><span className="empty-icon" aria-hidden="true">▤</span><h3>{hasActiveSearch ? t('catalog.noMatches') : t('catalog.emptyTitle')}</h3><p>{hasActiveSearch ? t('catalog.emptySearch') : t('catalog.emptyCatalog')}</p>{hasActiveSearch ? <button className="button button-secondary" type="button" onClick={handleClearSearch}>{t('catalog.clearSearch')}</button> : <button className="button button-secondary" type="button" onClick={() => setFormOpen(true)}>{t('app.createFirst')}</button>}</div>
                 )}
-                {listBusy && !recordPage && <p className="loading-state" role="status">{t('catalog.loadingRecords')}</p>}
+                {listBusy && !activePage && <p className="loading-state" role="status">{t('catalog.loadingRecords')}</p>}
               </div>
               <div className="pagination">
-                <span>{recordPage ? t('catalog.showing', { shown: formatLocaleNumber(locale, recordPage.items.length), total: formatLocaleNumber(locale, recordPage.totalCount) }) : ''}</span>
+                <span>{activePage ? t('catalog.showing', { shown: formatLocaleNumber(locale, activePage.items.length), total: formatLocaleNumber(locale, activePage.totalCount) }) : ''}</span>
                 <div className="pagination-actions">
                   <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.max(1, current - 1)) }} disabled={page <= 1 || listBusy}>{t('catalog.previous')}</button>
                   <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.min(totalPages, current + 1)) }} disabled={page >= totalPages || listBusy}>{t('catalog.next')}</button>

@@ -3,11 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test } from 'bun:test'
 import { ImportBatchDetailView, ImportCommitSummary } from '../src/import-commit-view'
 import type { ImportBatchDetail, ImportCommitResult } from '../src/import-commit'
-import { translate } from '../src/i18n'
+import { translateFor } from './translation-fixture'
+import type { MessageKey, MessageValues } from '../src/localization'
 
 const result: ImportCommitResult = { batchId: 'batch-1', sourceFileName: 'catalog.xlsx', status: 'completed', scannedRows: 4, importedRows: 2, skippedRows: 2, replayed: false, issues: [{ rowNumber: 3, code: 'duplicate_m_code' }, { rowNumber: 4, code: 'duplicate_m_code' }] }
 const detail: ImportBatchDetail = { batchId: 'batch-1', sourceFileName: 'catalog.xlsx', status: 'completed', startedAt: '2026-11-02T08:00:00Z', completedAt: '2026-11-02T08:00:01Z', scannedRows: 4, importedRows: 2, skippedRows: 2, replayed: false, issues: result.issues }
-const t = (key: Parameters<typeof translate>[1], values?: Parameters<typeof translate>[2]) => translate('vi', key, values)
+const t = (key: MessageKey, values?: MessageValues) => translateFor('vi', key, values)
 
 describe('Excel import result views', () => {
   test('shows imported and skipped counts with safe row-only duplicate details', () => {

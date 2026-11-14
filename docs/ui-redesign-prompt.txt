@@ -1,0 +1,638 @@
+PRODUCT MASTER DATA UI REDESIGN PROMPT
+
+You are a senior product designer and frontend design-system architect.
+
+Design a complete, production-ready UI redesign for an internal Product Master Data web application.
+
+The UI will later be implemented inside an existing React + TypeScript + Vite codebase. Do not redesign the backend, database, API contracts, authentication rules, or business logic. Focus only on the frontend visual system, layout, interaction design, responsive behavior, and component structure.
+
+PRODUCT CONTEXT
+
+This application manages product master data imported from Excel.
+
+The main user workflow is:
+
+1. The user signs in.
+2. The user sees a visual library of customers/companies.
+3. Each customer card should prioritize a large PIC image.
+4. The user clicks a customer.
+5. The user sees all product items belonging to that customer.
+6. Each item card should prioritize a large PIC image so the user can visually identify and select the item.
+7. The user clicks an item to inspect all 27 source fields.
+8. The user can create, edit, soft-delete, audit, search, filter, and import Excel data.
+9. The user can review import history and validation errors.
+
+IMPORTANT EXISTING DATA FIELDS
+
+The product record contains exactly these 27 source fields:
+
+1. Date
+2. Tên Công Ty / Company Name
+3. Item Name
+4. M.CODE
+5. Item Code
+6. Product Type
+7. Status SP
+8. KH Duyệt
+9. Lệnh Sample/SX
+10. Tên Công Ty Chữ Cái
+11. Khu vực cũ
+12. Ngày lưu mẫu
+13. PIC (Hình)
+14. PO
+15. Lệnh SX (PDF)
+16. Note
+17. Đã In (Ngày giờ)
+18. Tên Đĩa
+19. SOI
+20. MASO
+21. DENIER
+22. Giá
+23. Khu vực
+24. Số Lượng
+25. PIC URL
+26. Internal Item
+27. Request
+
+The UI must preserve every field. Do not hide or delete source data. The detail view must show all 27 fields in a clear, scannable layout.
+
+DESIGN DIRECTION
+
+Create a distinctive, premium internal workspace for product teams.
+
+Use the following visual references as inspiration only:
+
+- Vercel / Geist:
+  - precise grid
+  - restrained borders
+  - excellent typography hierarchy
+  - compact but spacious layout
+  - sharp alignment
+- Linear:
+  - focused workspace feeling
+  - high information density without visual clutter
+  - subtle dividers
+  - keyboard-friendly interactions
+  - strong active states
+- Material 3:
+  - semantic color roles
+  - accessible text/surface contrast
+  - consistent component states
+  - predictable focus, hover, disabled, error, and success states
+
+Do not copy any brand logo, exact page, text, illustration, or visual asset from those products. Use their design principles only.
+
+OVERALL MOOD
+
+- Professional
+- Calm
+- Precise
+- Premium
+- Image-first
+- Trustworthy
+- Suitable for internal operations and product teams
+- Not a generic admin dashboard
+- Not a generic AI-generated purple gradient dashboard
+- Not overly corporate
+- Not visually noisy
+
+COLOR SYSTEM
+
+Use a light-first interface with a refined dark mode.
+
+Recommended light palette:
+
+- Canvas: #F5F7F6
+- Main surface: #FFFFFF
+- Raised surface: #FBFCFB
+- Soft surface: #EEF4F1
+- Primary ink: #17252B
+- Secondary text: #5A6B70
+- Muted text: #829196
+- Border: #D8E2E0
+- Strong border: #B8C9C4
+- Primary accent: #087A73
+- Primary accent hover: #06665F
+- Primary accent soft: #E7F3F0
+- Success: #2F7D61
+- Warning: #B97824
+- Error: #B94C4C
+- Focus ring: #087A73
+
+Use teal as the main product accent because the interface manages product/catalog data and needs a stable, trustworthy identity.
+
+Use amber only for warnings such as duplicate M.CODE, incomplete records, or import validation issues.
+
+Use red only for destructive or failed actions.
+
+Avoid large gradients. If a very subtle background treatment is needed, keep it near-monochrome and low contrast.
+
+Recommended dark palette:
+
+- Dark canvas: #0E171A
+- Dark surface: #142226
+- Dark raised surface: #192C30
+- Dark border: #2C4448
+- Dark primary text: #EDF5F3
+- Dark secondary text: #A9BAB8
+- Dark accent: #54BDB1
+- Dark accent hover: #7BD2C6
+
+TYPOGRAPHY
+
+Use a modern sans-serif with strong readability.
+
+Preferred font stack:
+
+- Primary: Geist Sans, Inter, ui-sans-serif, system-ui, sans-serif
+- Technical values and identifiers: Geist Mono, IBM Plex Mono, ui-monospace, monospace
+
+Typography rules:
+
+- Page title: 32–40px, semibold or bold, tight letter spacing
+- Section title: 18–22px, semibold
+- Card title: 16–18px, semibold
+- Body: 14–16px
+- Metadata: 12–13px
+- Table/detail labels: 12–13px, uppercase only when useful
+- Do not use excessive uppercase text
+- Do not use more than two font families
+- Keep line lengths readable
+- Use tabular numerals for counts, prices, quantities, and pagination
+
+SPACING AND SHAPE SYSTEM
+
+Use a 4px base unit with an 8px rhythm.
+
+Recommended spacing tokens:
+
+- 4px
+- 8px
+- 12px
+- 16px
+- 24px
+- 32px
+- 48px
+- 64px
+- 80px
+
+Recommended radii:
+
+- Small control: 8px
+- Standard card: 12px
+- Large panel: 16px
+- Pill/status: 999px
+
+Do not use excessive rounded cards. The UI should feel structured, not playful.
+
+Do not use heavy drop shadows. Prefer borders, surface contrast, and very subtle elevation.
+
+APPLICATION SHELL
+
+Design the application with:
+
+1. A calm top navigation bar
+2. A compact brand area
+3. Workspace navigation for:
+   - Product Catalog
+   - Excel Import
+   - Import History
+4. User identity area
+5. Language selector
+6. Light/dark theme toggle
+7. Logout action
+
+The top bar should be clean and compact. It must not consume too much vertical space.
+
+LOGIN PAGE
+
+Create a polished internal login page.
+
+Layout:
+
+- Desktop: split layout
+- Left: product-data story panel
+- Right: login form
+- Mobile: single-column layout
+
+Left panel:
+
+- Dark ink/navy or deep teal background
+- Short message explaining centralized product catalog management
+- Abstract visual showing product cards, images, and structured data
+- Avoid stock illustrations
+- Use CSS shapes or restrained inline SVG only
+
+Right panel:
+
+- Clear title
+- Username field
+- Password field
+- Primary sign-in button
+- Generic safe error message
+- Language and theme controls
+- Strong focus states
+- No unnecessary registration or social-login elements
+
+CUSTOMER LIBRARY PAGE
+
+This is the most important screen.
+
+Create an image-first customer library.
+
+Header area:
+
+- Page title: “Customer Library” or localized equivalent
+- Short explanation
+- Total customer count
+- Search input
+- Optional sorting control
+- Primary action for creating a new record if authorized
+
+Customer card:
+
+- Large image area at the top
+- Use the representative PIC image when available
+- Use a refined placeholder when no image exists
+- Customer/company name
+- Number of items
+- Optional small metadata such as region or latest update
+- Entire card is keyboard accessible
+- Clear hover, pressed, selected, and focus states
+
+Customer card image behavior:
+
+- Aspect ratio approximately 4:3 or 16:10
+- Object-fit: cover
+- Avoid distorted images
+- Use a subtle neutral image background
+- Use a small “No PIC” placeholder, not a broken-image icon
+- Do not show raw long URLs in the card
+
+Grid:
+
+- Desktop: 4 columns where space allows
+- Medium: 3 columns
+- Tablet: 2 columns
+- Mobile: 1 column
+- Cards should have consistent heights
+- Maintain generous gutters
+- Do not create a masonry layout for customer cards
+
+CUSTOMER DETAIL / ITEM LIBRARY PAGE
+
+When the user opens a customer, show a clear breadcrumb:
+
+Product Catalog / Customer Name
+
+Header:
+
+- Back button
+- Customer name
+- Item count
+- Optional customer summary
+- Search within this customer
+- Filter and sort actions
+
+Item card:
+
+- Large PIC image at the top
+- Item name as the main title
+- Item Code
+- M.CODE
+- Product Type
+- Status badge if available
+- Optional small region or date metadata
+- Keep the card visually image-first
+- Make the entire card clickable
+- Use a visible focus ring
+- Avoid showing all 27 fields directly on the card
+
+Item grid:
+
+- Desktop: 4 columns
+- Medium: 3 columns
+- Tablet: 2 columns
+- Mobile: 1 column
+- Preserve image prominence
+- Keep item names readable even when long
+- Use line clamping only on card previews, never in the detail view
+
+PRODUCT DETAIL PAGE OR DRAWER
+
+Create a clear product detail experience.
+
+Desktop options:
+
+- Prefer a large detail panel or split-view drawer
+- Keep the selected item image visible and prominent
+- Put actions in a predictable top-right area
+
+Mobile:
+
+- Use a full-page detail layout
+- Keep back navigation obvious
+
+Detail layout:
+
+1. Image and identity summary
+2. Primary identifiers:
+   - Item Name
+   - Company Name
+   - M.CODE
+   - Item Code
+   - Product Type
+3. Status and workflow fields
+4. Production/order fields
+5. Commercial fields:
+   - Price
+   - Quantity
+   - Region
+6. Notes and request
+7. Source/reference URLs
+8. Audit history
+
+Show the 27 fields in grouped sections instead of one long undifferentiated list.
+
+Recommended groups:
+
+- Identity
+- Product Classification
+- Approval and Production
+- Company and Region
+- Commercial Data
+- PIC and Files
+- Notes and Requests
+- System Metadata
+
+For empty values:
+
+- Use a consistent em dash or localized “Not provided”
+- Do not make empty fields look like errors
+- Do not hide fields from the detail view
+
+PIC IMAGE BEHAVIOR
+
+The PIC field may contain a Google Drive link.
+
+The UI must support:
+
+- Google Drive file links
+- Google Drive open links
+- Google Drive thumbnail links
+- Regular HTTPS image URLs
+- Invalid or missing URLs
+
+For Google Drive links:
+
+- Extract the file ID
+- Convert it into a browser image URL such as:
+  https://drive.google.com/thumbnail?id=FILE_ID&sz=w1600
+- Show a graceful fallback if the file is private, deleted, unavailable, or not an image
+- Do not expose a broken image layout
+- Do not fetch arbitrary URLs through the backend
+- Only render safe HTTPS image sources
+
+Make it clear in the design that the Google Drive file must be shared as:
+“Anyone with the link — Viewer”
+Do not place this instruction inside the main product UI unless it belongs in an import/help state.
+
+SEARCH AND FILTERS
+
+Search should feel fast and focused.
+
+Customer-level search:
+
+- Search company/customer names
+- Show result count
+- Show a clear empty state
+- Preserve search text when navigating back
+
+Item-level search:
+
+- Search across all supported product fields
+- Allow expanding the filter panel
+- Include all 27 source fields in the filter UI
+- Use a clean two- or three-column filter layout on desktop
+- Collapse to one column on mobile
+- Clearly distinguish global search from field filters
+- Provide “Apply filters” and “Clear filters”
+- Reset pagination after applying filters
+
+Pagination:
+
+- Show current page and total pages
+- Disable unavailable actions
+- Keep pagination stable on mobile
+- Do not use infinite scroll for this internal catalog because users need predictable navigation
+
+IMPORT WORKSPACE
+
+Design an Excel import workflow that feels safe and deliberate.
+
+Stages:
+
+1. Upload workbook
+2. Select worksheet
+3. Review headers
+4. Map columns
+5. Preview rows
+6. Validate
+7. Explicit commit
+8. Show result summary
+
+Visual priorities:
+
+- Make the commit action clearly destructive or high-impact
+- Use a confirmation step
+- Show scanned, imported, skipped, and duplicate counts
+- Show row-level issues without dumping sensitive data
+- Make formulas and unsupported values visibly marked
+- Show progress/loading states
+- Never make import look like an instant, unreviewed upload
+
+Import history:
+
+- Use a compact table or timeline
+- Show filename, date, status, scanned count, imported count, skipped count
+- Allow opening a batch detail
+- Use semantic status badges:
+  - Completed
+  - Partial
+  - Failed
+  - Replayed
+
+AUDIT HISTORY
+
+Create an unobtrusive but clear audit history panel.
+
+Show:
+
+- Action
+- Actor
+- Timestamp
+- Outcome
+- Correlation ID when useful
+- Safe metadata
+
+Do not show passwords, tokens, raw workbook contents, or sensitive values.
+
+FORMS
+
+Create a reusable form system.
+
+Requirements:
+
+- Clear labels above inputs
+- Good default spacing
+- Clear required/optional distinction
+- Helpful but concise descriptions
+- Inline validation
+- Accessible error messages
+- Visible focus rings
+- Disabled and loading states
+- Textareas for Note and Request
+- URL fields should not visually dominate the form
+
+BUTTONS
+
+Define clear button hierarchy:
+
+- Primary: teal filled
+- Secondary: soft teal or outlined
+- Quiet: neutral outlined/text button
+- Destructive: red only for delete/soft-delete
+- Import commit: amber or strong teal with explicit confirmation, not casual styling
+
+Avoid excessive pill buttons.
+
+TABLES AND DENSE DATA
+
+Tables should be used for:
+
+- Import history
+- Audit history
+- Dense operational information
+
+Use:
+
+- Sticky headers when useful
+- Horizontal scrolling on mobile
+- Row hover
+- Clear column labels
+- Truncated previews with full values available in detail
+- No tiny unreadable text
+- No excessive borders
+
+RESPONSIVE BEHAVIOR
+
+Design and specify all breakpoints:
+
+- Mobile: 320–599px
+- Tablet: 600–959px
+- Desktop: 960–1439px
+- Wide desktop: 1440px and above
+
+Requirements:
+
+- No horizontal page overflow
+- Cards collapse naturally
+- Header actions wrap safely
+- Search controls become stacked
+- Detail fields become one column on mobile
+- Image remains prominent on every device
+- Buttons have comfortable touch targets
+- Do not hide essential actions behind inaccessible hover-only controls
+
+ACCESSIBILITY
+
+Follow WCAG-minded practices:
+
+- Keyboard navigation for every interactive element
+- Visible focus ring
+- Proper button semantics
+- Meaningful labels
+- Sufficient text/background contrast
+- Do not use color alone to communicate status
+- Accessible empty and loading states
+- Image alt text rules
+- Respect prefers-reduced-motion
+- Avoid flashing or aggressive animations
+
+MOTION
+
+Use restrained motion:
+
+- 120–220ms transitions
+- Gentle card hover elevation or border change
+- Smooth drawer/page transitions
+- Skeleton loading for large content areas
+- No excessive parallax
+- No animated gradients
+- No decorative motion that delays task completion
+
+AVOID GENERIC AI DESIGN PATTERNS
+
+Do not produce:
+
+- Purple-blue gradient backgrounds everywhere
+- Glassmorphism as the main visual language
+- Excessive neon
+- Huge hero text inside an operational dashboard
+- Random blobs
+- Excessive rounded pills
+- Unreadable tiny labels
+- Decorative charts unrelated to the workflow
+- Fake statistics
+- Fake customer data
+- Fake product images
+- Unnecessary sidebar navigation
+- Dribbble-style decoration that reduces usability
+
+DELIVERABLES
+
+Provide the following:
+
+1. A complete visual design concept
+2. A page-by-page layout specification
+3. A component inventory
+4. A color token system
+5. A typography scale
+6. Spacing, radius, border, shadow, and motion tokens
+7. Responsive breakpoint behavior
+8. Empty, loading, error, and success states
+9. Accessibility notes
+10. A working frontend prototype using React + TypeScript
+11. CSS variables for all design tokens
+12. Reusable components instead of duplicated markup
+13. A clear mapping from the prototype components to the existing application screens
+
+IMPLEMENTATION CONSTRAINTS
+
+- Preserve the existing backend API behavior
+- Preserve authentication and authorization behavior
+- Preserve the existing 27-field data model
+- Preserve Excel import behavior
+- Preserve audit behavior
+- Do not rename API routes
+- Do not invent new business rules
+- Do not hard-code fake records
+- Do not replace real PIC URLs with placeholder images in production behavior
+- Do not add a new UI framework unless explicitly requested
+- Keep the design implementable in the existing React + TypeScript + Vite codebase
+- Keep the design system maintainable and token-driven
+- Explain which existing files/components should be changed
+- Identify any new components that should be created
+- Do not modify backend files
+
+Before finishing, show:
+
+- Desktop customer library
+- Desktop item library
+- Product detail view
+- Import workflow
+- Mobile customer library
+- Dark mode
+- Empty state
+- Loading state
+- Error state

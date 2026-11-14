@@ -1,4 +1,4 @@
-import { getBackendErrorMessageKey, type MessageKey, type Translate } from './i18n'
+import { getBackendErrorMessageKey, type MessageKey, type Translate } from './localization'
 
 export type ApiErrorOptions = {
   forbiddenMessage?: MessageKey

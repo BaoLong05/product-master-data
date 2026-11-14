@@ -5,9 +5,8 @@ import {
   formatLocaleNumber,
   getLocalePreference,
   getThemePreference,
-  messageKeys,
-  translate,
-} from '../src/i18n'
+} from '../src/localization'
+import { messageKeys, translateFor } from './translation-fixture'
 
 const appMarkup = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const preferencesMarkup = readFileSync(new URL('../src/app-preferences.tsx', import.meta.url), 'utf8')
@@ -18,16 +17,16 @@ describe('frontend localization and theme', () => {
   test('provides complete, non-empty Vietnamese, English, and Korean messages', () => {
     for (const key of messageKeys) {
       for (const locale of ['vi', 'en', 'ko'] as const) {
-        expect(translate(locale, key).trim().length).toBeGreaterThan(0)
+        expect(translateFor(locale, key).trim().length).toBeGreaterThan(0)
       }
     }
-    expect(translate('vi', 'login.title')).toBe('Đăng nhập')
-    expect(translate('en', 'login.title')).toBe('Sign in')
-    expect(translate('ko', 'login.title')).toBe('로그인')
+    expect(translateFor('vi', 'login.title')).toBe('Đăng nhập')
+    expect(translateFor('en', 'login.title')).toBe('Sign in')
+    expect(translateFor('ko', 'login.title')).toBe('로그인')
   })
 
   test('interpolates UI values and formats counts and dates with the selected locale', () => {
-    expect(translate('en', 'catalog.totalCount', { count: 27 })).toContain('27')
+    expect(translateFor('en', 'catalog.totalCount', { count: 27 })).toContain('27')
     expect(formatLocaleNumber('vi', 1234567)).toBe(new Intl.NumberFormat('vi-VN').format(1234567))
     expect(formatLocaleNumber('en', 1234567)).toBe(new Intl.NumberFormat('en-US').format(1234567))
     expect(formatLocaleNumber('ko', 1234567)).toBe(new Intl.NumberFormat('ko-KR').format(1234567))

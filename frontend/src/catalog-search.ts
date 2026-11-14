@@ -9,6 +9,10 @@ export function buildCatalogQuery(
   if (search) parameters.set('q', search)
 
   for (const [field, rawValue] of Object.entries(filters)) {
+    if (field === 'companyNameExact') {
+      parameters.set(field, rawValue)
+      continue
+    }
     const value = rawValue.trim()
     if (value) parameters.set(field, value)
   }

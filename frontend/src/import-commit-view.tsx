@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ImportBatchDetail, ImportCommitResult, ImportHistoryItem } from './import-commit'
-import { formatLocaleDateTime, formatLocaleNumber, type Locale, type Translate } from './i18n'
+import { formatLocaleDateTime, formatLocaleNumber, type Locale, type Translate } from './localization'
 
 function importSummary(scannedRows: number, importedRows: number, skippedRows: number, locale: Locale, t: Translate): string {
   return t('import.commitSummary', {

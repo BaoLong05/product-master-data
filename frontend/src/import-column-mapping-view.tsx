@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useAppPreferences } from './use-app-preferences'
-import { formatLocaleNumber } from './i18n'
+import { formatLocaleNumber } from './localization'
 import {
   availableImportTargetFields,
   buildMappedImportPreview,

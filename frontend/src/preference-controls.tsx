@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useAppPreferences } from './use-app-preferences'
-import { getLocalePreference, localeNames, type Locale, type Theme } from './i18n'
+import { getLocalePreference, localeNames, type Locale, type Theme } from './localization'
 
 export function PreferenceControls(): ReactNode {
   const { locale, setLocale, theme, setTheme, t } = useAppPreferences()

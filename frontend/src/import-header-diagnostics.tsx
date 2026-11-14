@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { analyzeImportHeaders, importSourceHeaderCount } from './import-headers'
-import { formatLocaleNumber } from './i18n'
+import { formatLocaleNumber } from './localization'
 import { useAppPreferences } from './use-app-preferences'
 
 export function ImportHeaderDiagnostics({ headers }: { headers: readonly (string | null)[] }): ReactNode {
