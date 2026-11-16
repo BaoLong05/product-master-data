@@ -3,6 +3,7 @@ export function buildCatalogQuery(
   pageSize: number,
   searchText: string,
   filters: Record<string, string>,
+  companyNameExact?: string | null,
 ): string {
   const parameters = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   const search = searchText.trim()
@@ -12,6 +13,8 @@ export function buildCatalogQuery(
     const value = rawValue.trim()
     if (value) parameters.set(field, value)
   }
+
+  if (companyNameExact !== undefined) parameters.set('companyNameExact', companyNameExact ?? '')
 
   return `?${parameters.toString()}`
 }

@@ -49,7 +49,7 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
-    public async Task Record_list_returns_only_card_fields_while_detail_retains_all_source_fields()
+    public async Task Record_list_returns_item_identifiers_while_detail_retains_all_source_fields()
     {
         const string userName = "record.catalog-card.test";
         const string password = "A-strong-record-catalog-card-passphrase-2026";
@@ -82,9 +82,15 @@ public sealed class ProductRecordEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         Assert.Equal(27, sourceProperties.Length);
-        Assert.Equal(new[] { "companyName", "id", "picImage", "picUrl" },
+        Assert.Equal(new[] { "companyName", "id", "itemCode", "itemName", "mCode", "picImage", "picUrl", "productStatus", "productType", "purchaseOrder" },
             item.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
         Assert.Equal("catalog-value-companyName", item.GetProperty("companyName").GetString());
+        Assert.Equal("catalog-value-itemName", item.GetProperty("itemName").GetString());
+        Assert.Equal("catalog-value-mCode", item.GetProperty("mCode").GetString());
+        Assert.Equal("catalog-value-itemCode", item.GetProperty("itemCode").GetString());
+        Assert.Equal("catalog-value-productType", item.GetProperty("productType").GetString());
+        Assert.Equal("catalog-value-productStatus", item.GetProperty("productStatus").GetString());
+        Assert.Equal("catalog-value-purchaseOrder", item.GetProperty("purchaseOrder").GetString());
         Assert.Equal("catalog-value-picImage", item.GetProperty("picImage").GetString());
         Assert.Equal("catalog-value-picUrl", item.GetProperty("picUrl").GetString());
 
@@ -203,6 +209,41 @@ public sealed class ProductRecordEndpointTests
         Assert.Equal(1, page.PageSize);
         Assert.Equal(2, page.TotalCount);
         Assert.Single(page.Items);
+    }
+
+    [Fact]
+    public async Task Company_library_groups_source_names_and_item_queries_match_only_the_selected_company()
+    {
+        const string userName = "record.company-library.test";
+        const string password = "A-strong-record-company-library-passphrase-2026";
+        using var factory = new LoginApiFactory();
+        await factory.CreateUserAsync(userName, password);
+        await GrantPermissionsAsync(factory, userName, "records.read");
+        await SeedRecordAsync(factory, "COMPANY-001", "Alpha item one", "Alpha Manufacturing");
+        await SeedRecordAsync(factory, "COMPANY-002", "Alpha item two", "Alpha Manufacturing");
+        await SeedRecordAsync(factory, "COMPANY-003", "Similar name", "Alpha Manufacturing Ltd");
+        await SeedRecordAsync(factory, "COMPANY-004", "Case variant", "alpha manufacturing");
+        await SeedRecordAsync(factory, "COMPANY-005", "Unassigned null", null);
+        await SeedRecordAsync(factory, "COMPANY-006", "Unassigned blank", "");
+        await SeedRecordAsync(factory, "COMPANY-007", "Unassigned whitespace", "  ");
+        using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
+
+        using var directoryResponse = await client.GetAsync("/api/v1/companies?page=1&pageSize=2");
+        using var itemResponse = await client.GetAsync("/api/v1/records?companyNameExact=Alpha%20Manufacturing&page=1&pageSize=10");
+        using var unassignedResponse = await client.GetAsync("/api/v1/records?companyNameExact=&page=1&pageSize=10");
+        var directory = await directoryResponse.Content.ReadFromJsonAsync<CompanyDirectoryPageResponse>();
+        var items = await itemResponse.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+        var unassigned = await unassignedResponse.Content.ReadFromJsonAsync<ProductRecordPageResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, directoryResponse.StatusCode);
+        Assert.Equal(4, directory?.TotalCount);
+        Assert.Equal(2, directory?.Items.Count);
+        Assert.Equal(HttpStatusCode.OK, itemResponse.StatusCode);
+        Assert.Equal(2, items?.TotalCount);
+        Assert.All(items!.Items, item => Assert.Equal("Alpha Manufacturing", item.CompanyName));
+        Assert.Equal(HttpStatusCode.OK, unassignedResponse.StatusCode);
+        Assert.Equal(3, unassigned?.TotalCount);
+        Assert.All(unassigned!.Items, item => Assert.True(string.IsNullOrWhiteSpace(item.CompanyName)));
     }
 
     [Fact]
@@ -438,29 +479,36 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
-    public async Task Update_with_duplicate_m_code_is_conflict_without_changing_the_record_or_audit()
+    public async Task Repeated_m_codes_are_allowed_for_create_and_update()
     {
         const string userName = "record.update.duplicate.test";
         const string password = "A-strong-record-update-duplicate-passphrase-2026";
         using var factory = new LoginApiFactory();
         await factory.CreateUserAsync(userName, password);
-        await GrantPermissionsAsync(factory, userName, "records.update");
+        await GrantPermissionsAsync(factory, userName, "records.create", "records.update");
         var recordId = await SeedRecordAsync(factory, "UPDATE-UNIQUE-001", "Original item");
         await SeedRecordAsync(factory, "UPDATE-TAKEN-001", "Other item");
         using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
 
-        using var response = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
+        using var updateResponse = await client.PutAsJsonAsync($"/api/v1/records/{recordId}", new
         {
             version = 1,
             mCode = "UPDATE-TAKEN-001",
-            itemName = "Must not persist"
+            itemName = "Updated duplicate"
+        });
+        using var createResponse = await client.PostAsJsonAsync("/api/v1/records", new
+        {
+            mCode = "UPDATE-TAKEN-001",
+            itemName = "Created duplicate"
         });
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal(0, await CountAuditEventsAsync(factory));
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        Assert.Equal(2, await CountAuditEventsAsync(factory));
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
-        Assert.Equal("Original item", (await database.ProductRecords.SingleAsync(item => item.Id == recordId)).ItemName);
+        Assert.Equal(3, await database.ProductRecords.CountAsync(item => item.MCode == "UPDATE-TAKEN-001"));
+        Assert.Equal("Updated duplicate", (await database.ProductRecords.SingleAsync(item => item.Id == recordId)).ItemName);
     }
 
     [Fact]
@@ -591,6 +639,7 @@ public sealed class ProductRecordEndpointTests
         using var client = CreateHttpsClient(factory);
 
         using var listResponse = await client.GetAsync("/api/v1/records");
+        using var companyResponse = await client.GetAsync("/api/v1/companies");
         using var detailResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}");
         using var auditResponse = await client.GetAsync($"/api/v1/records/{Guid.NewGuid()}/audit");
         using var createResponse = await client.PostAsJsonAsync("/api/v1/records", new { itemName = "Anonymous" });
@@ -598,6 +647,7 @@ public sealed class ProductRecordEndpointTests
         using var deleteResponse = await client.DeleteAsync($"/api/v1/records/{Guid.NewGuid()}?version=1");
 
         Assert.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, companyResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, detailResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, auditResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, createResponse.StatusCode);
@@ -626,7 +676,7 @@ public sealed class ProductRecordEndpointTests
     }
 
     [Fact]
-    public async Task Duplicate_nonempty_m_code_returns_conflict_without_overwriting_the_existing_record()
+    public async Task Repeated_nonempty_m_code_creates_distinct_records_without_overwriting()
     {
         const string userName = "record.duplicate.test";
         const string password = "A-strong-record-duplicate-passphrase-2026";
@@ -637,21 +687,28 @@ public sealed class ProductRecordEndpointTests
         var payload = new { mCode = "M-UNIQUE-001", itemName = "Original item" };
 
         using var firstResponse = await client.PostAsJsonAsync("/api/v1/records", payload);
-        using var duplicateResponse = await client.PostAsJsonAsync("/api/v1/records", new { mCode = payload.mCode, itemName = "Replacement item" });
+        using var duplicateResponse = await client.PostAsJsonAsync("/api/v1/records", new { mCode = payload.mCode, itemName = "Second item" });
 
         Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
-        Assert.Equal(1, await CountRecordsAsync(factory));
-        Assert.Equal(1, await CountAuditEventsAsync(factory));
-        var location = Assert.IsAssignableFrom<Uri>(firstResponse.Headers.Location);
-        using var retrievedResponse = await client.GetAsync(location);
-        var retrieved = await retrievedResponse.Content.ReadFromJsonAsync<ProductRecordResponse>();
-        Assert.Equal("Original item", retrieved?.ItemName);
+        Assert.Equal(HttpStatusCode.Created, duplicateResponse.StatusCode);
+        Assert.Equal(2, await CountRecordsAsync(factory));
+        Assert.Equal(2, await CountAuditEventsAsync(factory));
+        var firstLocation = Assert.IsAssignableFrom<Uri>(firstResponse.Headers.Location);
+        var secondLocation = Assert.IsAssignableFrom<Uri>(duplicateResponse.Headers.Location);
+        using var firstDetailResponse = await client.GetAsync(firstLocation);
+        using var secondDetailResponse = await client.GetAsync(secondLocation);
+        var firstRecord = await firstDetailResponse.Content.ReadFromJsonAsync<ProductRecordResponse>();
+        var secondRecord = await secondDetailResponse.Content.ReadFromJsonAsync<ProductRecordResponse>();
+        Assert.NotEqual(firstRecord?.Id, secondRecord?.Id);
+        Assert.Equal("Original item", firstRecord?.ItemName);
+        Assert.Equal("Second item", secondRecord?.ItemName);
     }
 
     private sealed record LoginRequest(string UserName, string Password);
     private sealed record CsrfTokenResponse(string? RequestToken);
     private sealed record ProductRecordPageResponse(IReadOnlyList<ProductRecordListItem> Items, int Page, int PageSize, int TotalCount);
+    private sealed record CompanyDirectoryPageResponse(IReadOnlyList<CompanyListItem> Items, int Page, int PageSize, int TotalCount);
+    private sealed record CompanyListItem(string? CompanyName, int ItemCount);
     private sealed record ProductRecordListItem(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? ProductStatus, DateTimeOffset UpdatedAt);
     private sealed record ProductRecordResponse(Guid Id, string? MCode, string? ItemName, string? CompanyName, string? Note, long Version);
     private sealed record ProductRecordAuditResponse(
@@ -721,11 +778,11 @@ public sealed class ProductRecordEndpointTests
         await database.SaveChangesAsync();
     }
 
-    private static async Task<Guid> SeedRecordAsync(LoginApiFactory factory, string mCode, string itemName)
+    private static async Task<Guid> SeedRecordAsync(LoginApiFactory factory, string mCode, string itemName, string? companyName = null)
     {
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
-        var record = new ProductRecord { MCode = mCode, ItemName = itemName };
+        var record = new ProductRecord { MCode = mCode, ItemName = itemName, CompanyName = companyName };
         database.ProductRecords.Add(record);
         await database.SaveChangesAsync();
         return record.Id;

@@ -67,25 +67,27 @@ describe('frontend visual design system', () => {
   test('uses generous card padding and avoids gradients and drop shadows', () => {
     expect(ruleBody(appStyles, '.form-card')).toContain('padding: var(--space-6)')
     expect(ruleBody(appStyles, '.record-audit-panel')).toContain('padding: var(--space-6)')
-    expect(ruleBody(appStyles, '.login-card')).toContain('padding: var(--space-8)')
+    expect(ruleBody(appStyles, '.vault-login-card')).toContain('padding: var(--space-8)')
     expect(combinedStyles).not.toMatch(/gradient\s*\(/i)
     expect(combinedStyles).not.toMatch(/box-shadow\s*:/i)
   })
 
-  test('gives login a strong split layout that stacks on narrow screens', () => {
-    expect(appMarkup).toContain('className="login-layout"')
-    expect(appMarkup).toContain('className="login-story"')
-    expect(appMarkup).toContain('className="login-visual"')
-    expect(appMarkup).toContain('aria-hidden="true"')
-    expect(appMarkup).toContain("{t('login.storyTitle')}")
+  test('uses a readable primary-action foreground in both themes', () => {
+    expect(ruleBody(appStyles, '.button-primary')).toContain('color: var(--color-accent-foreground)')
+    expect(globalStyles).toMatch(/--color-accent-foreground:\s*#ffffff/)
+    expect(globalStyles).toMatch(/\[data-theme="dark"\][\s\S]*?--color-accent-foreground:\s*#071625/)
+  })
+
+  test('keeps sign-in visually aligned with the new archive shell', () => {
+    expect(appMarkup).toContain('className="vault-login-layout"')
+    expect(appMarkup).toContain('className="vault-login-card"')
     expect(appMarkup).toContain('className="login-field"')
     expect(appMarkup).toContain('autoComplete="username"')
     expect(appMarkup).toContain('autoComplete="current-password"')
-    expect(ruleBody(appStyles, '.login-layout')).toContain('grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr)')
-    expect(ruleBody(appStyles, '.login-story')).toContain('background: var(--color-story)')
-    expect(ruleBody(appStyles, '.login-visual')).toContain('width: min(100%, 520px)')
+    expect(ruleBody(appStyles, '.vault-login-layout')).toContain('width: min(100%, 30rem)')
+    expect(ruleBody(appStyles, '.vault-login-card')).toContain('padding: var(--space-8)')
     expect(appStyles).toContain('@media (max-width: 900px)')
-    expect(appStyles).toContain('.login-layout { width: min(100%, 640px); min-height: 0; grid-template-columns: minmax(0, 1fr); }')
+    expect(appMarkup).not.toContain('className="login-story"')
   })
 
   test('keeps readable base typography, responsive tables, interaction states, and reduced motion', () => {

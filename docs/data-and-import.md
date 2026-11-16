@@ -1,10 +1,10 @@
 # Data and Excel import
 
-Status: the schema preserves all 27 source values as nullable text. The API supports protected workbook preview, exact duplicate `M.CODE` validation, mapped idempotent commit, and import history. Commit preserves literal non-formula cell text and skips duplicate non-empty `M.CODE` rows; comprehensive typed validation remains pending. Embedded workbook drawings are not imported, so this is not yet a full-fidelity import of workbooks containing embedded images.
+Status: the schema preserves all 27 source values as nullable text. The API supports protected workbook preview, in-workbook repeated-`M.CODE` diagnostics, mapped idempotent commit, and import history. Commit preserves literal non-formula cell text and imports every row regardless of repeated `M.CODE`; comprehensive typed validation remains pending. Embedded workbook drawings are not imported, so this is not yet a full-fidelity import of workbooks containing embedded images.
 
 ## Observed workbook
 
-The supplied workbook has one sheet named `DATA`, 27 columns, and 11,817 physical rows including the header (11,816 data-row positions). There are 343 exact company-name values across 11,712 rows with a company name; 104 rows have no company name. Ten embedded images are present. The workbook also contains 9,315 formula cells whose cached results are `#NAME?`; formulas and cached results must be treated as absent, never evaluated or imported as values. The compressed file is 8,412,485 bytes and the largest XML part is 14,567,730 characters, within current upload/XML bounds. Source values include multilingual text, codes, date-like values, blanks, notes, and URLs; do not silently coerce ambiguous representations.
+The supplied workbook has one sheet named `DATA`, 27 columns, 13,281 populated data rows, 13 blank physical rows, and 13,295 worksheet rows including the header. It is 8,969,323 bytes and contains 10 embedded images and 10,706 formula cells. Formula expressions and cached results must be treated as absent, never evaluated or imported as values. The workbook fits the current 10 MiB upload and 20,000-row-position bounds. Source values include multilingual text, codes, date-like values, blanks, notes, and URLs; do not silently coerce ambiguous representations.
 
 ## Source columns
 
@@ -42,10 +42,10 @@ Keep source labels and raw values available for traceability. Do not assume a sp
 
 ## Decisions still required for typed parsing and production validation
 
-- `M.CODE` is the unique key when present. Because records may be saved with fields missing, a blank/null `M.CODE` is allowed and is not treated as a duplicate key; enforce uniqueness for non-empty values and use it to detect existing records and duplicates within an import batch.
+- `M.CODE` is a source identifier, not a record key. Blank and repeated values are allowed; preserve exact source text and use the record UUID to address a product record.
 - Required columns and valid domain values for product type/status/region/approval.
 - No source field is required to save a record; records may contain missing fields. Apply type/length validation independently of requiredness.
-- On duplicates, skip the affected row, report its source row number and reason, and never overwrite an existing record. Apply consistently to records already stored and repeated keys within a single import.
+- Repeated non-empty `M.CODE` values do not make a row ineligible. Import each source row independently; do not deduplicate or overwrite records by `M.CODE`.
 - Preserve all 27 columns as typed fields, or normalize some into related entities.
 - How to interpret date-only and local date/time fields; blank, malformed and out-of-range values.
 - Whether to retain original uploaded files and for how long.
@@ -57,9 +57,9 @@ See `database-schema.md` for the initial storage design and planned identity/imp
 1. Accept only `.xlsx`, enforce file size, row/column, worksheet and processing time bounds. Store temporary files outside public web roots and clean them up.
 2. Parse workbook data as values. Never evaluate formulas, macros, external references or links. Treat formulas in `PIC (Hình)`/`PO` as untrusted; do not execute or fetch them. Capture a supported URL only as text if present.
 3. Select worksheet, inspect header row, flag duplicate/missing/unrecognized headers, map columns explicitly, and show a bounded preview.
-4. Validate each row: type conversion, required values once agreed, maximum lengths, boolean/number/date parsing, URL scheme and duplicate candidates. Keep identifiers as strings so leading zeros survive.
+4. Validate each row: type conversion, required values once agreed, maximum lengths, boolean/number/date parsing, and URL scheme. Keep identifiers as strings so leading zeros survive. Repeated `M.CODE` diagnostics are informational only.
 5. Show counts and row/column errors before commit; allow error report download. Preview must not write business records.
-6. Require explicit `imports.commit` authorization and user confirmation. Apply the agreed dedupe policy with idempotent behavior and transaction semantics. Record summary and audit event.
+6. Require explicit `imports.commit` authorization and user confirmation. Preserve every accepted source row; rely on request-fingerprint idempotency and transaction semantics. Record summary and audit event.
 7. Store only necessary metadata; default to deleting temporary workbook after processing unless retention is approved.
 
 Imported links are never fetched server-side: avoids SSRF and unexpected external data transfer. Render spreadsheet text as text (not HTML); allow only safe clickable URL schemes in the client.
@@ -73,13 +73,13 @@ Imported links are never fetched server-side: avoids SSRF and unexpected externa
 - Header diagnostics mark repeated, missing, blank, and unfamiliar headers without normalization or automatic mapping. Recognition never preselects a target. Mapping must be chosen explicitly from the existing product-record fields; each target may be assigned to at most one source column, and selections remain in UI memory only, resetting when the workbook or worksheet changes. The mapped sample is a client-side projection of the same bounded raw rows; it preserves text and formula hiding and does not change the API contract. Neither preview nor mapping validates cell values, dates, URLs, or duplicates, decides import eligibility, or allows commit. The bounded sample is not a validation result. Server-side parsing is synchronous and has file/XML/row bounds but no hard wall-clock guarantee; import-wide processing/time limits and streaming row validation remain outstanding.
 - Uploads beyond the multipart/request limits may be rejected by ASP.NET Core with HTTP 413 before the endpoint returns its structured 400 errors.
 
-## Implemented duplicate M.CODE validation API
+## Implemented repeated M.CODE diagnostics API
 
-- `POST /api/v1/imports/validate` accepts multipart `file`, an exact `worksheetName`, and a required one-based `mCodeColumnNumber` chosen by the caller. It requires authentication, `imports.preview`, `records.read`, and a valid antiforgery token.
-- This endpoint checks only non-empty literal values in the selected M.CODE column: exact strings are compared without trimming, case folding, or other normalization; blank cells and formula cells (including cached results) are ignored. It reports every row in an in-workbook duplicate group and rows matching any stored record, including soft-deleted records, consistent with the global non-empty M.CODE unique index.
+- `POST /api/v1/imports/validate` accepts multipart `file`, an exact `worksheetName`, and a required one-based `mCodeColumnNumber` chosen by the caller. It requires authentication, `imports.preview`, and a valid antiforgery token.
+- This endpoint checks only non-empty literal values in the selected M.CODE column: exact strings are compared without trimming, case folding, or other normalization; blank cells and formula cells (including cached results) are ignored. It reports every row in an in-workbook repeated-value group. Stored active or soft-deleted records are not consulted because repeated M.CODE values are allowed.
 - Success returns the selected worksheet, scanned physical row span after the header (including omitted row numbers up to the last encountered row), duplicate-row count, and issues containing only `{ rowNumber, code }`; M.CODE values are never returned. The endpoint does not write product records, import batches, or audit events and does not persist the upload. Multipart request binding may use transient request-scoped buffers as noted above.
-- Limits: 10 MiB file, 20 worksheets, 100 columns, 20,000 physical data-row positions after the header, and 20,000,000 XML characters per parsed part. Out-of-order/duplicate row coordinates, invalid Excel row numbers, duplicate cell columns, and mismatched cell references are rejected. The scanner and database query observe request cancellation. Requests beyond host-level or multipart limits may be rejected by ASP.NET Core before the endpoint's structured errors run.
-- The React client exposes this check after the user explicitly maps a source column to M.CODE and loads the sample rows. It displays counts and affected Excel row numbers only. Duplicate detection is not full typed row validation or a commit decision; the separate commit endpoint still relies on explicit mapping and the confirmed duplicate rule.
+- Limits: 10 MiB file, 20 worksheets, 100 columns, 20,000 physical data-row positions after the header, and 20,000,000 XML characters per parsed part. Out-of-order/duplicate row coordinates, invalid Excel row numbers, duplicate cell columns, and mismatched cell references are rejected. The scanner observes request cancellation. Requests beyond host-level or multipart limits may be rejected by ASP.NET Core before the endpoint's structured errors run.
+- The React client exposes this check after the user explicitly maps a source column to M.CODE and loads the sample rows. It displays repeated-value counts and affected Excel row numbers only. This is informational, not a commit blocker or full typed row validation; commit imports every accepted row regardless of M.CODE repetitions.
 
 ## Date and value handling
 

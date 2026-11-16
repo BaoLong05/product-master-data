@@ -14,7 +14,7 @@ An administrator signs in, views active product records, searches across all sou
 - `POST /api/v1/records` requires `records.create` and a valid antiforgery token. It accepts all 27 source fields as nullable text, returns 201 and a resolvable Location.
 - `PUT /api/v1/records/{id}` requires `records.update` and a valid antiforgery token. It replaces all source fields and requires the current `version`; stale versions return 409. Successful updates increment the version and append a `records.updated` audit event atomically.
 - `DELETE /api/v1/records/{id}?version={version}` requires `records.delete` and a valid antiforgery token. It soft-deletes only active records, increments version, and appends a `records.deleted` audit event atomically. Unknown/already-deleted records return 404; stale version returns 409. The row and source fields remain stored and deleted records are excluded from list/detail.
-- No source field is required. Null and empty `M.CODE` values are allowed. Non-empty `M.CODE` is preserved exactly and must be unique; a duplicate returns a safe 409 without overwriting either record. Whitespace/case normalization is not added.
+- No source field is required. Null, empty, and repeated `M.CODE` values are allowed and preserved exactly. Distinct records remain addressable by UUID; whitespace/case normalization is not added.
 - Anonymous callers get 401; authenticated callers without the needed permission get 403. Invalid/missing antiforgery tokens do not write records.
 - Writes never evaluate formulas or fetch URLs; source values are stored as text.
 
@@ -35,7 +35,7 @@ An administrator signs in, views active product records, searches across all sou
 - `Anonymous_record_routes_return_unauthorized` checks list, detail, and create are inaccessible anonymously.
 - `Create_without_create_permission_is_forbidden_and_does_not_persist` checks deny-by-default writes.
 - `Create_without_antiforgery_token_is_rejected_without_persisting` checks CSRF rejection has no database side effect.
-- `Duplicate_nonempty_m_code_returns_conflict_without_overwriting_the_existing_record` checks the duplicate response and original-value preservation.
+- `Repeated_nonempty_m_code_creates_distinct_records_without_overwriting` checks that repeated codes create independent records with separate audit events and preserved values.
 - API integration tests use the test host's in-memory provider; PostgreSQL race behavior is not exercised by these cases.
 
 ## RED–GREEN–REFACTOR evidence

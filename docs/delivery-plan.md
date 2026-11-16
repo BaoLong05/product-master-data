@@ -8,7 +8,7 @@ Repository guidance, domain/data/import/permission docs, local Docker PostgreSQL
 
 ## Phase 1 — API foundation (in progress)
 
-The operational API foundation provides liveness/readiness health endpoints, a PostgreSQL readiness probe, consistent Problem Details for unmatched routes, a generated OpenAPI document, and API integration tests. The first PostgreSQL catalog schema and EF Core migration now store all 27 source values as nullable text, with partial unique M.CODE and active-list indexes. The first product-data APIs apply authentication and persisted-permission enforcement. Remaining foundation work includes structured logging and database-backed integration-test setup.
+The operational API foundation provides liveness/readiness health endpoints, a PostgreSQL readiness probe, consistent Problem Details for unmatched routes, a generated OpenAPI document, and API integration tests. The PostgreSQL catalog schema stores all 27 source values as nullable text with an active-list index; repeated M.CODE values are allowed. The first product-data APIs apply authentication and persisted-permission enforcement. Remaining foundation work includes structured logging and database-backed integration-test setup.
 
 ## Phase 2 — identity and permissions
 
@@ -16,11 +16,11 @@ Persisted local identity/role/permission schema and the permission catalog, safe
 
 ## Phase 3 — record management
 
-Delivered: paged active-record list, detail, create with optional text fields and exact non-empty `M.CODE` uniqueness, signed-in React list/create/edit/soft-delete UI, catalog search/filter, and a per-record read-only audit-history panel. Global search performs case-insensitive substring matching across all 27 source fields; each source field also has an individual substring filter. Search and filters combine with pagination on active records. Record create/update/soft-delete write append-only audit events. Update and soft-delete require current versions and increment them to prevent stale overwrites. Remaining: restore/permanent-erasure policy, PostgreSQL-backed concurrent API tests for record mutations, and broader UI permission affordances. Import/export and identity-change audit are not implemented.
+Delivered: paged active-record list, detail, create with optional text fields and repeated M.CODE support, signed-in React list/create/edit/soft-delete UI, catalog search/filter, and a per-record read-only audit-history panel. Global search performs case-insensitive substring matching across all 27 source fields; each source field also has an individual substring filter. Search and filters combine with pagination on active records. Record create/update/soft-delete write append-only audit events. Update and soft-delete require current versions and increment them to prevent stale overwrites. Remaining: restore/permanent-erasure policy, PostgreSQL-backed concurrent API tests for record mutations, and broader UI permission affordances. Import/export and identity-change audit are not implemented.
 
 ## Phase 4 — safe Excel import (in progress)
 
-Delivered: authenticated `.xlsx` preview with bounded raw sampling and explicit mapping; exact duplicate `M.CODE` validation; mapped idempotent commit with transactional batch/record/audit writes; and import history API/UI. Validation and commit share a 20,000 physical data-row-position cap, which accommodates the supplied workbook's 11,816 data-row positions. The actual workbook has now been inspected: formulas/caches are omitted, but its 10 embedded images are not extracted or persisted. Remaining: full typed row validation and a safe embedded-image storage/association design. PostgreSQL-provider checks are opt-in via dedicated disposable databases; never point these tests at the application database.
+Delivered: authenticated `.xlsx` preview with bounded raw sampling and explicit mapping; informational in-workbook repeated `M.CODE` diagnostics; mapped idempotent commit with transactional batch/record/audit writes; and import history API/UI. Validation and commit share a 20,000 physical data-row-position cap, which accommodates the supplied workbook's 13,281 populated data rows. Formula expressions/caches are omitted, and its 10 embedded images are not extracted or persisted. Remaining: full typed row validation and a safe embedded-image storage/association design. PostgreSQL-provider checks are opt-in via dedicated disposable databases; never point these tests at the application database.
 
 ## Phase 5 — operations hardening
 

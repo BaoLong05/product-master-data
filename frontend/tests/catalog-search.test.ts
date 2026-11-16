@@ -30,4 +30,13 @@ describe('buildCatalogQuery', () => {
     expect(query.get('mCode')).toBe('M-001')
     expect(query.has('note')).toBe(false)
   })
+
+  test('scopes item requests to the exact selected company, including the unassigned group', () => {
+    const namedCompany = new URLSearchParams(buildCatalogQuery(1, 50, '', {}, 'BLUE HORIZON CO. LTD'))
+    const unassigned = new URLSearchParams(buildCatalogQuery(1, 50, '', {}, null))
+
+    expect(namedCompany.get('companyNameExact')).toBe('BLUE HORIZON CO. LTD')
+    expect(unassigned.has('companyNameExact')).toBe(true)
+    expect(unassigned.get('companyNameExact')).toBe('')
+  })
 })

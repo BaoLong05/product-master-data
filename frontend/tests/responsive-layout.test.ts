@@ -7,10 +7,10 @@ const styles = `${globalStyles}\n${appStyles}`
 
 describe('responsive layout acceptance', () => {
   test('reflows the shared header and its controls on tablet and phone widths', () => {
-    expect(styles).toMatch(/@media\s*\(max-width:\s*900px\)[\s\S]*?\.topbar\s*\{[^}]*flex-wrap:\s*wrap/)
-    expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*?\.topbar\s*\{[^}]*flex-wrap:\s*wrap/)
-    expect(styles).toMatch(/@media\s*\(max-width:\s*500px\)[\s\S]*?\.topbar-actions\s*\{[^}]*flex-wrap:\s*wrap/)
-    expect(styles).toMatch(/\.topbar-actions\s*\{[^}]*min-width:\s*0/)
+    expect(styles).toMatch(/@media\s*\(max-width:\s*900px\)[\s\S]*?\.vault-topbar\s*\{[^}]*flex-wrap:\s*wrap/)
+    expect(styles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*?\.vault-topbar\s*\{[^}]*flex-wrap:\s*wrap/)
+    expect(styles).toMatch(/@media\s*\(max-width:\s*500px\)[\s\S]*?\.vault-topbar-actions\s*\{[^}]*flex-wrap:\s*wrap/)
+    expect(styles).toMatch(/\.vault-topbar-actions\s*\{[^}]*min-width:\s*0/)
   })
 
   test('stacks pagination and keeps the table scroll bounded on narrow phones', () => {
@@ -18,10 +18,12 @@ describe('responsive layout acceptance', () => {
     expect(styles).toContain('.table-scroll { width: 100%; min-width: 0; overflow-x: auto;')
   })
 
-  test('uses a responsive company-card grid and focused detail layout', () => {
-    expect(appStyles).toMatch(/\.catalog-record-grid\s*\{[^}]*display:\s*grid/)
-    expect(appStyles).toMatch(/\.catalog-record-card\s*\{[^}]*min-width:\s*0/)
-    expect(appStyles).toMatch(/\.catalog-record-photo\s*\{[^}]*aspect-ratio:/)
+  test('uses a responsive library shell and photo-first item gallery', () => {
+    expect(appStyles).toMatch(/\.vault-app-shell\s*\{[^}]*minmax\(0,\s*1fr\)/)
+    expect(appStyles).toMatch(/@media\s*\(max-width:\s*720px\)[\s\S]*?\.vault-app-shell\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    expect(appStyles).toMatch(/\.catalog-gallery-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill/)
+    expect(appStyles).toMatch(/\.catalog-gallery-image\s*\{[^}]*object-fit:\s*contain/)
+    expect(appStyles).toMatch(/\.catalog-gallery-photo\s*\{[^}]*aspect-ratio:/)
     expect(appStyles).toMatch(/\.record-detail-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax/)
   })
 

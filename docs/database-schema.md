@@ -5,8 +5,8 @@ Status: product catalog, local identity/permission persistence, import-batch his
 ## Confirmed invariants
 
 - A product record may have every source field missing.
-- `M.CODE` is unique only when non-empty. NULL/empty values are allowed and do not collide.
-- Duplicate import rows are skipped and reported with source row/reason; existing records are never overwritten.
+- Repeated `M.CODE` values are allowed, including across active and soft-deleted records. Product records are addressed by UUID.
+- Import preserves each source row independently; `M.CODE` is never used to deduplicate or overwrite a record.
 - Local accounts are administered by application administrators.
 - Preserve all 27 workbook source headers and values; identifiers remain text.
 
@@ -24,7 +24,7 @@ Columns:
 
 Indexes/constraints:
 
-- Partial unique index on `m_code` only where value is neither NULL nor the empty string. No case folding or trimming is performed by the database; source identifiers are preserved exactly. Import normalization policy must be decided before any trimming/case-insensitive matching is added.
+- No unique index or constraint is defined on `m_code`; the exact nullable text source value is preserved and may repeat.
 - Index `(is_deleted, updated_at DESC)` for active-record listing.
 - No other uniqueness constraints or required business fields.
 

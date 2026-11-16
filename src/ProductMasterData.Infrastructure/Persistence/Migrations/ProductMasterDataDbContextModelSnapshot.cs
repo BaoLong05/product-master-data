@@ -316,11 +316,6 @@ namespace ProductMasterData.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MCode")
-                        .IsUnique()
-                        .HasDatabaseName("ux_product_records_m_code_non_empty")
-                        .HasFilter("m_code IS NOT NULL AND m_code <> ''");
-
                     b.HasIndex("IsDeleted", "UpdatedAt")
                         .IsDescending(false, true)
                         .HasDatabaseName("ix_product_records_active_updated_at")

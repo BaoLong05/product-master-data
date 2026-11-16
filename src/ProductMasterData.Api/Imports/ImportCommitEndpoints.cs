@@ -151,7 +151,7 @@ public static class ImportCommitEndpoints
             return Results.Ok(ToResponse(previousBatch, replayed: true));
         }
 
-        var candidateRows = new List<(int RowNumber, ProductRecord Record)>(workbook.Rows.Count);
+        var rowsToImport = new List<ProductRecord>(workbook.Rows.Count);
         foreach (var row in workbook.Rows)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -161,54 +161,16 @@ public static class ImportCommitEndpoints
                 FieldSetters[targetField](record, row.Values[columnNumber - 1]);
             }
 
-            candidateRows.Add((row.RowNumber, record));
+            rowsToImport.Add(record);
         }
 
-        var duplicateCodes = candidateRows
-            .Where(row => !string.IsNullOrEmpty(row.Record.MCode))
-            .GroupBy(row => row.Record.MCode!, StringComparer.Ordinal)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToHashSet(StringComparer.Ordinal);
-        var mappedCodes = candidateRows
-            .Select(row => row.Record.MCode)
-            .Where(code => !string.IsNullOrEmpty(code))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        var existingCodes = new HashSet<string>(StringComparer.Ordinal);
-        if (mappedCodes.Length > 0)
-        {
-            var storedCodes = await database.ProductRecords
-                .AsNoTracking()
-                .Where(record => mappedCodes.Contains(record.MCode!))
-                .Select(record => record.MCode!)
-                .ToListAsync(cancellationToken);
-            existingCodes.UnionWith(storedCodes);
-        }
-
-        var issues = candidateRows
-            .Where(row => !string.IsNullOrEmpty(row.Record.MCode)
-                && (duplicateCodes.Contains(row.Record.MCode!) || existingCodes.Contains(row.Record.MCode!)))
-            .Select(row => ImportRowIssue.Create(Guid.Empty, row.RowNumber, "duplicate_m_code"))
-            .ToArray();
-        var skippedRowNumbers = issues.Select(issue => issue.RowNumber).ToHashSet();
-        var rowsToImport = candidateRows
-            .Where(row => !skippedRowNumbers.Contains(row.RowNumber))
-            .Select(row => row.Record)
-            .ToArray();
         var batch = ImportBatch.Create(
             actorId,
             SafeFileName(file.FileName),
             fingerprint,
             workbook.Rows.Count,
-            rowsToImport.Length,
-            issues.Length);
-        foreach (var issue in issues)
-        {
-            var persistedIssue = ImportRowIssue.Create(batch.Id, issue.RowNumber, issue.Code);
-            batch.Issues.Add(persistedIssue);
-            database.ImportRowIssues.Add(persistedIssue);
-        }
+            rowsToImport.Count,
+            0);
 
         database.ProductRecords.AddRange(rowsToImport);
         database.ImportBatches.Add(batch);
@@ -237,10 +199,6 @@ public static class ImportCommitEndpoints
             return concurrentBatch is null
                 ? Results.Conflict(new ApiErrorResponse("import_commit_conflict", "The import could not be completed safely. Retry the same file."))
                 : Results.Ok(ToResponse(concurrentBatch, replayed: true));
-        }
-        catch (DbUpdateException exception) when (IsUniqueViolation(exception, "ux_product_records_m_code_non_empty"))
-        {
-            return Results.Conflict(new ApiErrorResponse("import_duplicate_conflict", "A record with one of these M.CODE values was created concurrently. No rows were imported; retry to review duplicates."));
         }
 
         return Results.Created($"/api/v1/imports/history/{batch.Id:D}", ToResponse(batch, replayed: false));

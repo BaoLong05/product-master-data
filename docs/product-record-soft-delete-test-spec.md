@@ -7,7 +7,7 @@ Status: implemented as a local-only removal action. It is recoverable by databas
 - `DELETE /api/v1/records/{id}?version={version}` requires `records.delete` and a valid antiforgery token.
 - The target must be active and the supplied version must match. Unknown/already deleted IDs return 404; stale versions return 409 without changes.
 - Success marks the record deleted, increments version/UpdatedAt, returns 204, and writes one `records.deleted` append-only event atomically. Metadata contains only record ID and version numbers.
-- Deleted records disappear from list and detail. Their database row and all source values remain. Existing M.CODE uniqueness is retained for deleted rows; this slice does not release or reuse a deleted code.
+- Deleted records disappear from list and detail. Their database row and all source values remain. M.CODE values may match active or other soft-deleted records; record identity remains the UUID.
 - Anonymous, missing-permission, and missing-CSRF requests do not mutate record/audit state.
 
 ## UI behavior

@@ -18,10 +18,8 @@ const backendCodes = {
   invalid_query_parameter: 'error.backend.invalidQueryParameter',
   invalid_query_value: 'error.backend.invalidQueryValue',
   record_version_conflict: 'error.backend.recordVersionConflict',
-  duplicate_m_code: 'error.backend.duplicateMCode',
   invalid_column_mapping: 'error.backend.invalidColumnMapping',
   import_commit_conflict: 'error.backend.importCommitConflict',
-  import_duplicate_conflict: 'error.backend.importDuplicateConflict',
   invalid_page_size: 'error.backend.invalidPageSize',
 } as const
 
@@ -48,7 +46,7 @@ describe('backend API error localization', () => {
 
   test('translates each source-verified backend code in Vietnamese, English, and Korean', async () => {
     for (const [code, key] of Object.entries(backendCodes)) {
-      const response = Response.json({ code, message: `raw server message for ${code}` }, { status: code === 'duplicate_m_code' || code === 'record_version_conflict' ? 409 : 400 })
+      const response = Response.json({ code, message: `raw server message for ${code}` }, { status: code === 'record_version_conflict' ? 409 : 400 })
       for (const locale of locales) {
         const message = await localizeApiError(response.clone(), tFor(locale))
         expect(message).toBe(translate(locale, key))

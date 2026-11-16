@@ -63,11 +63,6 @@ public sealed class ProductRecordConfiguration : IEntityTypeConfiguration<Produc
             .IsConcurrencyToken()
             .IsRequired();
 
-        builder.HasIndex(record => record.MCode)
-            .HasDatabaseName("ux_product_records_m_code_non_empty")
-            .IsUnique()
-            .HasFilter("m_code IS NOT NULL AND m_code <> ''");
-
         builder.HasIndex(record => new { record.IsDeleted, record.UpdatedAt })
             .HasDatabaseName("ix_product_records_active_updated_at")
             .IsDescending(false, true)

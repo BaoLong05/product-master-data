@@ -21,18 +21,18 @@ namespace ProductMasterData.Api.Tests;
 public sealed class ImportPreviewEndpointTests
 {
     [ImportValidationPostgresFact]
-    public async Task PostgreSql_validation_matches_exact_MCodes_including_soft_deleted_records()
+    public async Task PostgreSql_validation_reports_only_repeated_codes_in_the_workbook()
     {
         var connection = new NpgsqlConnectionStringBuilder(
             Environment.GetEnvironmentVariable("PRODUCTMASTERDATA_TEST_IMPORT_POSTGRES"));
         Assert.Equal("import_validation_test", connection.Database);
         Assert.Equal("127.0.0.1", connection.Host);
 
-        const string userName = "import.validation.postgres.test";
+        var userName = $"import.validation.postgres.{Guid.NewGuid():N}";
         const string password = "A-strong-import-validation-postgres-passphrase-2026";
         using var factory = new LoginApiFactory(postgresConnectionString: connection.ConnectionString);
         await factory.CreateUserAsync(userName, password);
-        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
@@ -54,8 +54,8 @@ public sealed class ImportPreviewEndpointTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(validation);
         Assert.Equal(4, validation.ScannedRows);
-        Assert.Equal(3, validation.DuplicateRows);
-        Assert.Equal(new[] { 2, 3, 4 }, validation.Issues.Select(issue => issue.RowNumber));
+        Assert.Equal(2, validation.DuplicateRows);
+        Assert.Equal(new[] { 2, 3 }, validation.Issues.Select(issue => issue.RowNumber));
         Assert.All(validation.Issues, issue => Assert.Equal("duplicate_m_code", issue.Code));
     }
 
@@ -217,7 +217,7 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
-    public async Task Import_skips_existing_and_repeated_codes_without_exposing_values()
+    public async Task Import_preserves_rows_with_existing_and_repeated_m_codes()
     {
         const string userName = "import.commit.duplicates.test";
         const string password = "A-strong-import-commit-duplicates-passphrase-2026";
@@ -242,12 +242,16 @@ public sealed class ImportPreviewEndpointTests
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(result);
         Assert.Equal(4, result.ScannedRows);
-        Assert.Equal(1, result.ImportedRows);
-        Assert.Equal(3, result.SkippedRows);
-        Assert.Equal(new[] { 2, 3, 4 }, result.Issues.Select(issue => issue.RowNumber));
+        Assert.Equal(4, result.ImportedRows);
+        Assert.Equal(0, result.SkippedRows);
+        Assert.Empty(result.Issues);
         var json = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("EXIST", json, StringComparison.Ordinal);
         Assert.DoesNotContain("REPEAT", json, StringComparison.Ordinal);
+        using var resultScope = factory.Services.CreateScope();
+        var resultDatabase = resultScope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
+        Assert.Equal(2, await resultDatabase.ProductRecords.CountAsync(record => record.MCode == "REPEAT"));
+        Assert.Equal(2, await resultDatabase.ProductRecords.CountAsync(record => record.MCode == "EXIST"));
     }
 
     [Fact]
@@ -650,13 +654,13 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
-    public async Task M_code_matching_an_existing_record_is_reported_without_echoing_the_key()
+    public async Task Existing_m_code_is_not_flagged_and_does_not_require_record_read_permission()
     {
         const string userName = "import.validate.existing.test";
         const string password = "A-strong-import-validate-existing-passphrase-2026";
         using var factory = new LoginApiFactory();
         await factory.CreateUserAsync(userName, password);
-        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
@@ -676,20 +680,18 @@ public sealed class ImportPreviewEndpointTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(validation);
         Assert.Equal(1, validation.ScannedRows);
-        Assert.Equal(1, validation.DuplicateRows);
-        var issue = Assert.Single(validation.Issues);
-        Assert.Equal(2, issue.RowNumber);
-        Assert.Equal("duplicate_m_code", issue.Code);
+        Assert.Equal(0, validation.DuplicateRows);
+        Assert.Empty(validation.Issues);
     }
 
     [Fact]
-    public async Task M_code_matching_a_soft_deleted_record_is_reported()
+    public async Task Soft_deleted_m_code_is_not_flagged_for_import_validation()
     {
         const string userName = "import.validate.soft-deleted.test";
         const string password = "A-strong-import-validate-soft-deleted-passphrase-2026";
         using var factory = new LoginApiFactory();
         await factory.CreateUserAsync(userName, password);
-        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
@@ -710,28 +712,22 @@ public sealed class ImportPreviewEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(validation);
-        Assert.Equal(1, validation.DuplicateRows);
-        Assert.Equal(2, Assert.Single(validation.Issues).RowNumber);
+        Assert.Equal(0, validation.DuplicateRows);
+        Assert.Empty(validation.Issues);
     }
 
     [Fact]
-    public async Task M_code_shared_strings_are_compared_exactly_without_normalization()
+    public async Task Workbook_repeated_m_codes_are_compared_exactly_without_normalization()
     {
         const string userName = "import.validate.exact-string.test";
         const string password = "A-strong-import-validate-exact-string-passphrase-2026";
         using var factory = new LoginApiFactory();
         await factory.CreateUserAsync(userName, password);
-        await GrantPermissionsAsync(factory, userName, "imports.preview", "records.read");
-        using (var scope = factory.Services.CreateScope())
-        {
-            var database = scope.ServiceProvider.GetRequiredService<ProductMasterDataDbContext>();
-            database.ProductRecords.Add(new ProductRecord { MCode = "KEY-A" });
-            await database.SaveChangesAsync();
-        }
+        await GrantPermissionsAsync(factory, userName, "imports.preview");
 
         using var client = await CreateAuthenticatedClientAsync(factory, userName, password);
         using var content = new MultipartFormDataContent();
-        content.Add(new ByteArrayContent(CreateWorkbookWithMCodeValues("KEY-A", "key-a", " KEY-A ", "")), "file", "products.xlsx");
+        content.Add(new ByteArrayContent(CreateWorkbookWithMCodeValues("KEY-A", "key-a", " KEY-A ", "KEY-A", "")), "file", "products.xlsx");
         content.Add(new StringContent("DATA"), "worksheetName");
         content.Add(new StringContent("1"), "mCodeColumnNumber");
 
@@ -741,9 +737,9 @@ public sealed class ImportPreviewEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(validation);
-        Assert.Equal(4, validation.ScannedRows);
-        Assert.Equal(1, validation.DuplicateRows);
-        Assert.Equal(2, Assert.Single(validation.Issues).RowNumber);
+        Assert.Equal(5, validation.ScannedRows);
+        Assert.Equal(2, validation.DuplicateRows);
+        Assert.Equal(new[] { 2, 5 }, validation.Issues.Select(issue => issue.RowNumber));
         Assert.DoesNotContain("KEY-A", json, StringComparison.Ordinal);
     }
 
@@ -839,7 +835,7 @@ public sealed class ImportPreviewEndpointTests
     }
 
     [Fact]
-    public async Task M_code_validation_requires_records_read_in_addition_to_import_preview()
+    public async Task M_code_validation_requires_only_import_preview()
     {
         const string userName = "import.validate.records-read-denied.test";
         const string password = "A-strong-import-validate-records-read-passphrase-2026";
@@ -853,8 +849,11 @@ public sealed class ImportPreviewEndpointTests
         content.Add(new StringContent("1"), "mCodeColumnNumber");
 
         using var response = await client.PostAsync("/api/v1/imports/validate", content);
+        var validation = await response.Content.ReadFromJsonAsync<ImportValidationResponse>();
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.Equal(0, validation.DuplicateRows);
     }
 
     [Fact]

@@ -6,7 +6,7 @@ Status: acceptance criteria for the PostgreSQL catalog and local identity/permis
 
 1. One `product_records` row has an application-generated UUID identity, independent of Excel row number.
 2. All 27 source values are nullable and preserved as text until parser/date/time/number semantics are confirmed; no source field is required.
-3. A non-empty `M.CODE` is unique. NULL and empty-string values are allowed to repeat. No case folding or silent trimming.
+3. `M.CODE` is nullable source text and may repeat exactly across any records. Record identity is the UUID; no case folding or silent trimming is applied.
 4. `created_at`, `updated_at`, `is_deleted`, and `version` are required system fields with explicit defaults/semantics.
 5. Index active listing by `is_deleted, updated_at DESC`.
 6. Migration can be applied to PostgreSQL without dropping or resetting existing data.
@@ -16,9 +16,9 @@ Status: acceptance criteria for the PostgreSQL catalog and local identity/permis
 ## Automated acceptance cases
 
 - EF model maps the record to `product_records` with all 27 nullable source fields.
-- EF model includes the partial unique index on non-null, non-empty `m_code` and the active-list index.
+- EF model has no unique index on `m_code` and includes the active-list index.
 - EF model maps Identity users/roles and the permission/role-permission schema; all 22 catalog entries are seeded.
 
 ## Local PostgreSQL verification
 
-Apply the checked-in migrations with `bun run db:migrate`. Verify that PostgreSQL reports 32 product-record columns (27 source + ID + 4 system fields), the Identity and permission tables, 22 permission rows, both named catalog indexes, and both migration history rows. In a transaction that is rolled back, verify multiple NULL/empty `M.CODE` values are accepted and a duplicate non-empty value raises a unique-constraint violation. Do not reset/drop the developer database or named volume.
+Apply the checked-in migrations with `bun run db:migrate`. Verify that PostgreSQL reports 32 product-record columns (27 source + ID + 4 system fields), the Identity and permission tables, 22 permission rows, the active-list index, and the new additive migration. In a dedicated disposable PostgreSQL test database, verify multiple rows with the same non-empty `M.CODE` persist and remain distinct by UUID. Do not reset/drop the developer database or named volume.

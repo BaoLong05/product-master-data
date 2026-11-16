@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using ProductMasterData.Api.Identity;
 using ProductMasterData.Domain.Audit;
 using ProductMasterData.Domain.Catalog;
@@ -14,7 +13,6 @@ namespace ProductMasterData.Api.Catalog;
 
 public static class ProductRecordEndpoints
 {
-    private const string MCodeUniqueConstraint = "ux_product_records_m_code_non_empty";
     private static readonly IReadOnlyDictionary<string, string> SourceFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["dateValue"] = nameof(ProductRecord.DateValue),
@@ -48,6 +46,9 @@ public static class ProductRecordEndpoints
 
     public static IEndpointRouteBuilder MapProductRecordEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapGet("/api/v1/companies", ListCompaniesAsync)
+            .WithTags("Product companies")
+            .RequireAuthorization(PermissionPolicies.For("records.read"));
         var records = endpoints.MapGroup("/api/v1/records").WithTags("Product records");
         records.MapGet("", ListAsync)
             .RequireAuthorization(PermissionPolicies.For("records.read"));
@@ -80,6 +81,7 @@ public static class ProductRecordEndpoints
 
         var allowedQueryKeys = SourceFields.Keys
             .Append("q")
+            .Append("companyNameExact")
             .Append("page")
             .Append("pageSize")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -107,6 +109,14 @@ public static class ProductRecordEndpoints
             }
         }
 
+        if (httpRequest.Query.TryGetValue("companyNameExact", out var companyScope))
+        {
+            var exactCompanyName = companyScope[0];
+            activeRecords = string.IsNullOrWhiteSpace(exactCompanyName)
+                ? activeRecords.Where(record => record.CompanyName == null || record.CompanyName.Trim() == string.Empty)
+                : activeRecords.Where(record => record.CompanyName == exactCompanyName);
+        }
+
         var totalCount = await activeRecords.CountAsync(cancellationToken);
         var offset = (long)(page - 1) * pageSize;
         var items = offset >= totalCount
@@ -120,10 +130,71 @@ public static class ProductRecordEndpoints
                     record.Id,
                     record.CompanyName,
                     record.PicImage,
-                    record.PicUrl))
+                    record.PicUrl,
+                    record.ItemName,
+                    record.MCode,
+                    record.ItemCode,
+                    record.ProductType,
+                    record.ProductStatus,
+                    record.PurchaseOrder))
                 .ToListAsync(cancellationToken);
 
         return Results.Ok(new ProductRecordPageResponse(items, page, pageSize, totalCount));
+    }
+
+    private static async Task<IResult> ListCompaniesAsync(
+        ProductMasterDataDbContext database,
+        HttpRequest httpRequest,
+        CancellationToken cancellationToken,
+        int page = 1,
+        int pageSize = 50,
+        string? q = null)
+    {
+        if (page < 1 || pageSize is < 1 or > 100)
+        {
+            return Results.BadRequest(new ApiErrorResponse("invalid_pagination", "Page must be positive and pageSize must be between 1 and 100."));
+        }
+
+        var allowedQueryKeys = new HashSet<string>(["q", "page", "pageSize"], StringComparer.OrdinalIgnoreCase);
+        if (httpRequest.Query.Keys.Any(key => !allowedQueryKeys.Contains(key)))
+        {
+            return Results.BadRequest(new ApiErrorResponse("invalid_query_parameter", "The query contains an unsupported search or filter field."));
+        }
+
+        if (httpRequest.Query.Any(parameter => parameter.Value.Count != 1))
+        {
+            return Results.BadRequest(new ApiErrorResponse("invalid_query_value", "Each search or filter parameter must have exactly one value."));
+        }
+
+        var activeRecords = database.ProductRecords.AsNoTracking().Where(record => !record.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var queryText = q.ToLowerInvariant();
+            activeRecords = activeRecords.Where(record =>
+                record.CompanyName != null && record.CompanyName.ToLower().Contains(queryText));
+        }
+
+        var companies = activeRecords
+            .GroupBy(record => record.CompanyName == null || record.CompanyName.Trim() == string.Empty
+                ? string.Empty
+                : record.CompanyName)
+            .Select(group => new CompanyDirectoryGroup(group.Key, group.Count()));
+        var allCompanies = await companies.ToListAsync(cancellationToken);
+        var totalCount = allCompanies.Count;
+        var offset = (long)(page - 1) * pageSize;
+        var items = offset >= totalCount
+            ? Array.Empty<CompanyDirectoryItemResponse>()
+            : allCompanies
+                .OrderBy(company => company.CompanyName == string.Empty ? 1 : 0)
+                .ThenBy(company => company.CompanyName)
+                .Skip((int)offset)
+                .Take(pageSize)
+                .Select(company => new CompanyDirectoryItemResponse(
+                    company.CompanyName == string.Empty ? null : company.CompanyName,
+                    company.ItemCount))
+                .ToArray();
+
+        return Results.Ok(new CompanyDirectoryPageResponse(items, page, pageSize, totalCount));
     }
 
     private static Expression<Func<ProductRecord, bool>> BuildSearchPredicate(string searchText)
@@ -231,12 +302,6 @@ public static class ProductRecordEndpoints
             return Results.Unauthorized();
         }
 
-        if (!string.IsNullOrEmpty(request.MCode) && await database.ProductRecords
-                .AnyAsync(record => record.MCode == request.MCode, cancellationToken))
-        {
-            return DuplicateMCode();
-        }
-
         var record = new ProductRecord
         {
             DateValue = request.DateValue,
@@ -276,14 +341,7 @@ public static class ProductRecordEndpoints
             "succeeded",
             httpContext.TraceIdentifier,
             JsonSerializer.Serialize(new { recordId = record.Id })));
-        try
-        {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (IsDuplicateMCodeViolation(exception))
-        {
-            return DuplicateMCode();
-        }
+        await database.SaveChangesAsync(cancellationToken);
 
         return Results.CreatedAtRoute("GetProductRecord", new { id = record.Id }, ToResponse(record));
     }
@@ -316,12 +374,6 @@ public static class ProductRecordEndpoints
         if (record.Version != request.Version)
         {
             return Results.Conflict(new ApiErrorResponse("record_version_conflict", "The record has changed. Reload it before saving."));
-        }
-
-        if (!string.IsNullOrEmpty(request.MCode) && await database.ProductRecords
-                .AnyAsync(item => item.Id != id && item.MCode == request.MCode, cancellationToken))
-        {
-            return DuplicateMCode();
         }
 
         var previousVersion = record.Version;
@@ -368,10 +420,6 @@ public static class ProductRecordEndpoints
         catch (DbUpdateConcurrencyException)
         {
             return Results.Conflict(new ApiErrorResponse("record_version_conflict", "The record has changed. Reload it before saving."));
-        }
-        catch (DbUpdateException exception) when (IsDuplicateMCodeViolation(exception))
-        {
-            return DuplicateMCode();
         }
 
         return Results.Ok(ToResponse(record));
@@ -429,17 +477,7 @@ public static class ProductRecordEndpoints
         return Results.NoContent();
     }
 
-    private static IResult DuplicateMCode() =>
-        Results.Conflict(new ApiErrorResponse("duplicate_m_code", "A record with this M.CODE already exists."));
-
     private static string RecordTarget(Guid recordId) => $"product_records/{recordId:D}";
-
-    private static bool IsDuplicateMCodeViolation(DbUpdateException exception) =>
-        exception.GetBaseException() is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: MCodeUniqueConstraint
-        };
 
     private static ProductRecordResponse ToResponse(ProductRecord record) => new(
         record.Id,
@@ -581,12 +619,28 @@ public sealed record ProductRecordListItemResponse(
     Guid Id,
     string? CompanyName,
     string? PicImage,
-    string? PicUrl);
+    string? PicUrl,
+    string? ItemName,
+    string? MCode,
+    string? ItemCode,
+    string? ProductType,
+    string? ProductStatus,
+    string? PurchaseOrder);
 
 public sealed record ProductRecordPageResponse(
     IReadOnlyList<ProductRecordListItemResponse> Items,
     int Page,
     int PageSize,
     int TotalCount);
+
+public sealed record CompanyDirectoryItemResponse(string? CompanyName, int ItemCount);
+
+public sealed record CompanyDirectoryPageResponse(
+    IReadOnlyList<CompanyDirectoryItemResponse> Items,
+    int Page,
+    int PageSize,
+    int TotalCount);
+
+internal sealed record CompanyDirectoryGroup(string? CompanyName, int ItemCount);
 
 public sealed record ApiErrorResponse(string Code, string Message);

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 type NavigationModule = {
   WorkspaceNavigation: (props: {
     activeView: 'catalog' | 'import'
-    labels: { navigation: string; catalog: string; import: string }
+    labels: { navigation: string; section?: string; catalog: string; import: string }
     onSelect: (view: 'catalog' | 'import') => void
   }) => React.ReactElement
   WorkspacePanel: (props: {
@@ -25,19 +25,25 @@ it('shows localized catalog/import navigation and selects the import workspace',
   const onSelect = mock(() => {})
   const props = {
     activeView: 'catalog' as const,
-    labels: { navigation: 'Workspace navigation', catalog: 'Catalog', import: 'Excel import' },
+    labels: { navigation: 'Workspace navigation', section: 'Library', catalog: 'Catalog', import: 'Excel import' },
     onSelect,
   }
   const navigation = WorkspaceNavigation(props)
   const markup = renderToStaticMarkup(navigation)
 
   expect(markup).toContain('aria-label="Workspace navigation"')
+  expect(markup).toContain('id="vault-sidebar-navigation"')
+  expect(markup).toContain('Library')
   expect(markup).toContain('aria-current="page"')
   expect(markup).toContain('Catalog')
   expect(markup).toContain('Excel import')
+  expect(markup).toContain('aria-label="Excel import"')
+  expect(markup).toContain('<svg aria-hidden="true"')
 
   const buttons = navigation.props.children as React.ReactElement[]
-  buttons[1].props.onClick()
+  const importButton = buttons.find((button) => button?.props['data-view'] === 'import')
+  expect(importButton).toBeDefined()
+  importButton?.props.onClick()
   expect(onSelect).toHaveBeenCalledWith('import')
 })
 

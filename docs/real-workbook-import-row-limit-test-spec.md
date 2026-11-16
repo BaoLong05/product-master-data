@@ -4,7 +4,7 @@ Status: implemented; test-first evidence recorded below.
 
 ## Observed input
 
-`C:\cv\Sample Input Form.xlsx` is 8,412,485 bytes. Its `DATA` worksheet has 11,817 physical rows (one header plus 11,816 data-row positions) and 27 columns. The largest uncompressed XML part is 14,567,730 bytes, below the parser's 20,000,000-character per-part limit. The workbook is below the 10 MiB upload limit.
+`C:\cv\Sample Input Form.xlsx` is 8,969,323 bytes. Its `DATA` worksheet has 13,281 populated data rows, 13 blank physical rows, 13,295 rows including the header, and 27 columns. It is below the 10 MiB upload limit and 20,000-row-position limit. It also contains 10,706 formula cells and 10 embedded images; formulas/caches are omitted and embedded images are outside the current import contract.
 
 ## Problem
 
@@ -12,14 +12,14 @@ Before this slice, the shared import reader and M.CODE scanner capped physical d
 
 ## Slice and safety boundary
 
-Raise the bounded physical row-position limit to 20,000 so this workbook fits with headroom. Keep the 10 MiB upload bound, 100-column bound, cancellation checks, formula omission, duplicate-M.CODE behavior, and transaction/idempotency rules unchanged. This slice does not claim to preserve or import embedded drawing images; the workbook contains embedded images and image ingestion remains a separate required design/implementation slice before claiming full-fidelity workbook import.
+Raise the bounded physical row-position limit to 20,000 so this workbook fits with headroom. Keep the 10 MiB upload bound, 100-column bound, cancellation checks, formula omission, repeated-M.CODE acceptance, and transaction/idempotency rules. This slice does not claim to preserve or import embedded drawing images; image ingestion remains a separate required design/implementation slice before claiming full-fidelity workbook import.
 
 ## Acceptance tests
 
 | ID | Given / when | Then |
 |---|---|---|
-| RL1 | Commit a valid workbook with 11,816 data rows | The API returns Created, reports all 11,816 rows scanned/imported, and persists exactly that many records. |
-| RL2 | Scan a worksheet whose physical data-row span is 11,816 positions, including sparse positions | M.CODE validation completes and reports the full span. |
+| RL1 | Commit a valid workbook with 13,281 populated data rows | The API returns Created, reports every populated row scanned/imported, and persists exactly that many records. |
+| RL2 | Scan a worksheet whose physical data-row span matches the supplied workbook | M.CODE diagnostics complete and report the full span. |
 | RL3 | Scan/import a workbook with 20,001 physical data-row positions | It is rejected with the stable `workbook_row_limit_exceeded` error; no partial validation or business writes occur. |
 | RL4 | Read formula cells in the accepted range | Formula expressions and cached results remain omitted, consistent with existing tests. |
 

@@ -11,7 +11,7 @@ namespace ProductMasterData.Api.Tests;
 public sealed class PostgresAuditTests
 {
     [AuditPostgresFact]
-    public async Task Audit_events_are_append_only_and_failed_record_creation_rolls_back_its_audit_event()
+    public async Task Audit_events_are_append_only_and_repeated_m_codes_are_allowed()
     {
         var connection = new NpgsqlConnectionStringBuilder(
             Environment.GetEnvironmentVariable("PRODUCTMASTERDATA_TEST_AUDIT_POSTGRES"));
@@ -60,24 +60,13 @@ public sealed class PostgresAuditTests
                 .SingleAsync());
 
             var existingCode = $"PG-AUDIT-{Guid.NewGuid():N}";
-            database.ProductRecords.Add(new ProductRecord { MCode = existingCode });
+            database.ProductRecords.AddRange(
+                new ProductRecord { MCode = existingCode },
+                new ProductRecord { MCode = existingCode });
             await database.SaveChangesAsync();
 
-            var rejectedRecord = new ProductRecord { MCode = existingCode };
-            database.ProductRecords.Add(rejectedRecord);
-            database.AuditEvents.Add(AuditEvent.Create(
-                actorId: null,
-                action: "records.created",
-                target: $"product_records/{rejectedRecord.Id:D}",
-                outcome: "succeeded",
-                correlationId: Guid.NewGuid().ToString("N"),
-                metadataJson: JsonSerializer.Serialize(new { recordId = rejectedRecord.Id })));
-            await Assert.ThrowsAsync<DbUpdateException>(() => database.SaveChangesAsync());
-
             await using var verification = new ProductMasterDataDbContext(options);
-            Assert.Equal(1, await verification.ProductRecords.CountAsync(record => record.MCode == existingCode));
-            Assert.False(await verification.AuditEvents.AnyAsync(auditEvent =>
-                auditEvent.Target == $"product_records/{rejectedRecord.Id:D}"));
+            Assert.Equal(2, await verification.ProductRecords.CountAsync(record => record.MCode == existingCode));
         }
     }
 }

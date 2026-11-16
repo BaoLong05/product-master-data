@@ -1,11 +1,9 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using ProductMasterData.Api.Catalog;
 using ProductMasterData.Api.Identity;
 using ProductMasterData.Application.Imports;
-using ProductMasterData.Infrastructure.Persistence;
 
 namespace ProductMasterData.Api.Imports;
 
@@ -19,9 +17,7 @@ public static class ImportValidationEndpoints
     {
         endpoints.MapPost("/api/v1/imports/validate", ValidateAsync)
             .WithTags("Imports")
-            .RequireAuthorization(
-                PermissionPolicies.For("imports.preview"),
-                PermissionPolicies.For("records.read"))
+            .RequireAuthorization(PermissionPolicies.For("imports.preview"))
             .DisableAntiforgery()
             .WithMetadata(
                 new RequestSizeLimitAttribute(MaximumRequestBytes),
@@ -35,7 +31,6 @@ public static class ImportValidationEndpoints
         [FromForm] string? mCodeColumnNumber,
         IAntiforgery antiforgery,
         IWorkbookMCodeScanner scanner,
-        ProductMasterDataDbContext database,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -85,28 +80,13 @@ public static class ImportValidationEndpoints
                 worksheetName,
                 selectedColumn,
                 cancellationToken);
-            var codes = scan.Values
-                .Select(value => value.Value)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            var existingCodes = new HashSet<string>(StringComparer.Ordinal);
-            if (codes.Length > 0)
-            {
-                var persistedCodes = await database.ProductRecords
-                    .AsNoTracking()
-                    .Where(record => codes.Contains(record.MCode!))
-                    .Select(record => record.MCode!)
-                    .ToListAsync(cancellationToken);
-                existingCodes.UnionWith(persistedCodes);
-            }
-
             var repeatedCodes = scan.Values
                 .GroupBy(value => value.Value, StringComparer.Ordinal)
                 .Where(group => group.Count() > 1)
                 .Select(group => group.Key)
                 .ToHashSet(StringComparer.Ordinal);
             var issues = scan.Values
-                .Where(value => existingCodes.Contains(value.Value) || repeatedCodes.Contains(value.Value))
+                .Where(value => repeatedCodes.Contains(value.Value))
                 .Select(value => new ImportMCodeValidationIssue(value.RowNumber, "duplicate_m_code"))
                 .OrderBy(issue => issue.RowNumber)
                 .ToArray();

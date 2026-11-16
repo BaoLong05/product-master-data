@@ -26,15 +26,14 @@ public sealed class ProductRecordSchemaTests
     }
 
     [Fact]
-    public void Product_record_schema_has_partial_unique_m_code_and_active_listing_indexes()
+    public void Product_record_schema_has_active_listing_index_and_no_unique_m_code_index()
     {
         using var context = CreateContext();
         var entity = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(ProductRecord));
 
         Assert.NotNull(entity);
-        var uniqueMCodeIndex = Assert.Single(entity.GetIndexes(), index =>
+        Assert.DoesNotContain(entity.GetIndexes(), index =>
             index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual([nameof(ProductRecord.MCode)]));
-        Assert.Equal("m_code IS NOT NULL AND m_code <> ''", uniqueMCodeIndex.GetFilter());
 
         var listingIndex = Assert.Single(entity.GetIndexes(), index =>
             index.Properties.Select(property => property.Name).SequenceEqual(

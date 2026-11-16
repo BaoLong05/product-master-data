@@ -18,17 +18,9 @@ From repository root:
 
 ```sh
 bun install
-bun run db:up
 dotnet tool restore
-bun run dev:web
-```
-
-In another PowerShell terminal, set the API's database connection string to the same credentials in `.env`, apply the schema migration, then start the API:
-
-```powershell
-$env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=15432;Database=product_master_data;Username=product_master_data;Password=<same value as POSTGRES_PASSWORD in .env>"
-bun run db:migrate
-dotnet run --project src/ProductMasterData.Api
+bun run data
+bun run dev
 ```
 
 The API health endpoints are `GET /health/live` and `GET /health/ready`; readiness executes a small PostgreSQL query and returns only aggregate status. The frontend is at Vite's printed localhost URL. PostgreSQL is bound to `127.0.0.1` only. `bun run db:migrate` applies all checked-in additive migrations, including product catalog, identity/permissions, and append-only audit storage. First-admin bootstrap, local cookie login/logout, CSRF tokens, login throttling, server-side session revocation, and persisted permission checks for record and audit endpoints are implemented. See `docs/delivery-plan.md` for remaining workflow scope.
@@ -36,6 +28,8 @@ The API health endpoints are `GET /health/live` and `GET /health/ready`; readine
 ## Root commands
 
 - `bun run dev:web` — Vite frontend development server.
+- `bun run dev` — ASP.NET Core API and Vite frontend together; Ctrl+C stops both. Configure `.env` first and run `bun run data` once to start PostgreSQL and apply migrations.
+- `bun run data` — starts PostgreSQL with Docker Compose, waits for it to become healthy, restores the local .NET tool and applies additive EF Core migrations. It preserves the named database volume.
 - `bun run build:web` / `bun run lint:web` / `bun run test:web` — frontend build, lint, and tests.
 - `bun run db:up`, `bun run db:down`, `bun run db:logs`, `bun run db:migrate` — local PostgreSQL lifecycle and additive schema migration.
 - `bun run api:build`, `bun run api:test` — .NET solution checks.

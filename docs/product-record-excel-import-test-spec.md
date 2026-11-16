@@ -18,9 +18,9 @@ Out of scope: typed/date/decimal/enum/URL interpretation, required-field rules, 
 - No product field is required; rows may be partially or entirely empty. Unmapped fields are stored as `NULL`.
 - Mapping is explicit and one-to-one. Mapping may omit any target, including `M.CODE`; a missing/blank `M.CODE` is permitted.
 - Formula cells and cached formula results are untrusted and are treated as absent values.
-- Non-empty `M.CODE` is unique by exact string, including values on soft-deleted rows. If a key already exists or occurs more than once in this workbook, skip every row in that duplicate group; do not select a winner or overwrite a record.
+- `M.CODE` is a source identifier, not a database key: repeated exact values are valid across active, soft-deleted, and imported records. Preserve each source row independently; do not deduplicate, overwrite, or skip rows based on `M.CODE`.
 - Exact repeat of the same actor + workbook bytes + worksheet + mapping is idempotent and returns the original batch outcome without re-creating records.
-- Record writes, batch summary, safe row errors, and one audit event commit atomically. A database failure leaves none of those effects behind. A concurrent uniqueness race fails the whole batch safely rather than partially importing or overwriting.
+- Record writes, batch summary, safe row errors, and one audit event commit atomically. A database failure leaves none of those effects behind. Idempotent replay is keyed by actor + workbook bytes + worksheet + mapping, not by `M.CODE`.
 - Error/report/history DTOs contain source row numbers and stable reason codes, never raw source values or M.CODE values. Audit metadata contains identifiers and counts only.
 
 ## HTTP contract
@@ -38,13 +38,14 @@ Transport errors use safe stable `{code,message}` responses. Commit rejects miss
 | ID | Given / when | Then | Test layer |
 |---|---|---|---|
 | A1 | Authorized operator commits a workbook with mapped source values | All mapped values persist byte-for-byte as text; unmapped values are NULL; response counts match; one batch and one audit event persist | API + database |
-| A2 | File contains repeated non-empty M.CODE or a key already stored, including soft-deleted | Every affected row is skipped and reported with row number/reason; unrelated and blank-key rows import; existing records are unchanged | API + database |
+| A2 | File contains repeated non-empty M.CODE or a key already stored, including soft-deleted | Every source row is imported independently; existing records are unchanged; M.CODE values are not exposed in import diagnostics | API + database |
 | A3 | Formula cell has a cached value | Neither formula nor cache is stored or considered a duplicate | API + database |
 | A4 | Same actor commits exact same bytes/sheet/mapping again | Same batch/outcome is returned; no duplicate records, batch, or audit event is created | API + database |
 | A5 | User is anonymous, lacks `imports.commit`, or omits/invalidates antiforgery | Request is rejected before parsing/writes; no records/batch/audit rows | API integration |
 | A6 | Mapping JSON is malformed, references an absent column/unknown field, or assigns a target twice | Stable 400 error; no persistence effects | API integration |
 | A7 | Import history is requested by an unauthorized user or for an unknown batch | 403 or 404 respectively; no protected details leak | API integration |
 | A8 | Persistence fails after some candidate rows are prepared | Transaction leaves no product records, batch, row issues, or audit event | PostgreSQL integration |
+| A11 | Two records or import rows have the same non-empty M.CODE | Both persist and remain independently addressable by record ID; PostgreSQL schema has no unique M.CODE constraint | API + PostgreSQL integration |
 | A9 | UI user previews/maps, confirms commit, receives mixed result, and revisits history | Loading, confirmation, summary, row reasons, empty/error history states are understandable and localized; no source values are displayed in issue details | Frontend workflow |
 | A10 | Workbook exceeds file/worksheet/column/XML/row bounds or request cancellation occurs | Safe rejection/cancellation; no writes | API + reader tests |
 

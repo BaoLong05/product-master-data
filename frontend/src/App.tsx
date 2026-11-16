@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { buildCatalogQuery } from './catalog-search'
-import { CatalogRecordCard, CatalogRecordDetail, type CatalogCardRecord } from './catalog-cards'
+import { CatalogRecordDetail } from './catalog-cards'
+import { CatalogRecordGallery, type CatalogGalleryRecord } from './catalog-record-gallery'
+import { CompanyDirectory, type CompanyDirectoryItem } from './company-directory'
+import { buildCompanyQuery } from './company-search'
 import { createRecordDetailRequestGuard } from './record-detail-request'
 import { WorkspaceNavigation, WorkspacePanel } from './workspace-navigation'
 import { ImportColumnMapping as ImportColumnMappingView } from './import-column-mapping-view'
@@ -48,13 +51,14 @@ type ProductRecordForm = {
   internalItem: string
   request: string
 }
-type ProductRecordListItem = CatalogCardRecord
+type ProductRecordListItem = CatalogGalleryRecord
 type ProductRecordPage = {
   items: ProductRecordListItem[]
   page: number
   pageSize: number
   totalCount: number
 }
+type CompanyDirectoryPage = { items: CompanyDirectoryItem[]; page: number; pageSize: number; totalCount: number }
 type ProductRecordDetail = {
   [Key in keyof ProductRecordForm]: string | null
 } & { id: string; createdAt: string; updatedAt: string; version: number }
@@ -137,7 +141,14 @@ function AppContent() {
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
   const [recordPage, setRecordPage] = useState<ProductRecordPage | null>(null)
+  const [companyPage, setCompanyPage] = useState<CompanyDirectoryPage | null>(null)
+  const [selectedCompany, setSelectedCompany] = useState<CompanyDirectoryItem | null>(null)
+  const [companyBusy, setCompanyBusy] = useState(false)
+  const [companyError, setCompanyError] = useState('')
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<'catalog' | 'import'>('catalog')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileNavToggleRef = useRef<HTMLButtonElement>(null)
   const [selectedRecord, setSelectedRecord] = useState<ProductRecordDetail | null>(null)
   const [recordDetailBusy, setRecordDetailBusy] = useState(false)
   const [recordDetailError, setRecordDetailError] = useState('')
@@ -180,6 +191,11 @@ function AppContent() {
   const recordDetailRequestGuard = useRef(createRecordDetailRequestGuard())
 
   useEffect(() => {
+    if (!mobileNavOpen) return
+    document.getElementById('vault-sidebar-navigation')?.querySelector('button')?.focus()
+  }, [mobileNavOpen])
+
+  useEffect(() => {
     let cancelled = false
     const loadIdentity = async () => {
       try {
@@ -197,14 +213,39 @@ function AppContent() {
   }, [t])
 
   useEffect(() => {
-    if (!identity) return
+    if (!identity || selectedCompany) return
+    let cancelled = false
+    const controller = new AbortController()
+    const loadCompanies = async () => {
+      setCompanyBusy(true)
+      setCompanyError('')
+      try {
+        const query = buildCompanyQuery(page, pageSize, searchTerm)
+        const response = await fetch(`/api/v1/companies?${query}`, { credentials: 'same-origin', signal: controller.signal })
+        if (!response.ok) throw new Error(await responseMessage(response, t))
+        const result = await response.json() as CompanyDirectoryPage
+        if (!cancelled) setCompanyPage(result)
+      } catch (error) {
+        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setCompanyError(error instanceof Error ? error.message : t('error.catalogLoad'))
+        }
+      } finally {
+        if (!cancelled) setCompanyBusy(false)
+      }
+    }
+    void loadCompanies()
+    return () => { cancelled = true; controller.abort() }
+  }, [identity, page, searchTerm, listVersion, selectedCompany, t])
+
+  useEffect(() => {
+    if (!identity || !selectedCompany) return
     let cancelled = false
     const controller = new AbortController()
     const loadRecords = async () => {
       setListBusy(true)
       setListError('')
       try {
-        const query = buildCatalogQuery(page, pageSize, searchTerm, filters)
+        const query = buildCatalogQuery(page, pageSize, searchTerm, filters, selectedCompany.companyName)
         const response = await fetch(`/api/v1/records${query}`, {
           credentials: 'same-origin',
           signal: controller.signal,
@@ -225,7 +266,14 @@ function AppContent() {
       cancelled = true
       controller.abort()
     }
-  }, [identity, page, listVersion, searchTerm, filters, t])
+  }, [identity, page, listVersion, searchTerm, filters, selectedCompany, t])
+
+  const handleApplyTextSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    closeAuditPanel()
+    setPage(1)
+    setSearchTerm(searchDraft)
+  }
 
   const handleApplySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -498,8 +546,13 @@ function AppContent() {
       setRecordDetailBusy(false)
       setRecordDetailError('')
       setActiveWorkspaceView('catalog')
+      setMobileNavOpen(false)
       setIdentity(null)
       setRecordPage(null)
+      setCompanyPage(null)
+      setSelectedCompany(null)
+      setCompanyBusy(false)
+      setListBusy(false)
       setFormOpen(false)
       setEditingRecord(null)
       setForm(emptyForm())
@@ -599,47 +652,26 @@ function AppContent() {
 
   const selectedAuditOpen = selectedRecord !== null && auditPanel?.recordId === selectedRecord.id
   const selectedRecordLabel = selectedRecord ? selectedRecord.mCode || selectedRecord.itemName || selectedRecord.id : ''
+  const closeMobileNavigation = () => {
+    setMobileNavOpen(false)
+    mobileNavToggleRef.current?.focus()
+  }
 
   if (!identity) {
     return (
-      <main className="login-page">
-        <div className="login-page-toolbar"><PreferenceControls /></div>
-        <div className="login-layout">
-          <section className="login-story" aria-labelledby="login-story-title">
-            <div className="login-story-brand">
-              <span className="login-story-mark" aria-hidden="true">PM</span>
-              <span className="login-story-wordmark"><strong>Product Master Data</strong><small>{t('brand.workspace')}</small></span>
-            </div>
-            <div className="login-story-copy">
-              <p className="eyebrow">{t('login.storyEyebrow')}</p>
-              <h1 id="login-story-title">{t('login.storyTitle')}</h1>
-              <p className="login-story-description">{t('login.storyDescription')}</p>
-            </div>
-            <div className="login-visual" aria-hidden="true">
-              <svg viewBox="0 0 560 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect className="login-visual-frame" x="22" y="18" width="384" height="184" rx="16" />
-                <rect className="login-visual-topbar" x="42" y="38" width="344" height="34" rx="8" />
-                <circle className="login-visual-accent" cx="60" cy="55" r="5" />
-                <path className="login-visual-line" d="M78 55h92M184 55h44M258 55h72" />
-                <rect className="login-visual-cell" x="42" y="88" width="96" height="28" rx="6" />
-                <rect className="login-visual-cell" x="148" y="88" width="112" height="28" rx="6" />
-                <rect className="login-visual-cell" x="270" y="88" width="116" height="28" rx="6" />
-                <rect className="login-visual-cell" x="42" y="126" width="96" height="28" rx="6" />
-                <rect className="login-visual-cell" x="148" y="126" width="112" height="28" rx="6" />
-                <rect className="login-visual-cell" x="270" y="126" width="116" height="28" rx="6" />
-                <path className="login-visual-line" d="M56 102h46M163 102h54M286 102h73M56 140h52M163 140h70M286 140h61" />
-                <rect className="login-visual-float" x="326" y="98" width="208" height="104" rx="14" />
-                <circle className="login-visual-accent" cx="350" cy="122" r="6" />
-                <path className="login-visual-line" d="M366 122h86M348 150h164M348 168h124M348 186h146" />
-              </svg>
-            </div>
-            <p className="login-story-meta"><strong>{t('login.sourceFields')}</strong><span aria-hidden="true">·</span><span>{t('login.catalogManaged')}</span></p>
-          </section>
-
-          <section className="login-card" aria-labelledby="login-title">
-            <div className="login-card-heading">
+      <main className="vault-login-page">
+        <header className="vault-login-header">
+          <a className="brand" href="/" aria-label={t('brand.catalogLabel')}>
+            <span className="brand-mark" aria-hidden="true">PM</span>
+            <span><strong>Product Master Data</strong><small>{t('brand.workspace')}</small></span>
+          </a>
+          <PreferenceControls />
+        </header>
+        <section className="vault-login-layout" aria-labelledby="login-title">
+          <div className="vault-login-card">
+            <div className="vault-login-card-heading">
               <p className="eyebrow">{t('login.internal')}</p>
-              <h2 id="login-title">{t('login.title')}</h2>
+              <h1 id="login-title">{t('login.title')}</h1>
               <p className="login-card-copy">{t('login.copy')}</p>
             </div>
             {(loginError || sessionError) && <p className="alert alert-error" role="alert">{loginError || sessionError}</p>}
@@ -657,27 +689,82 @@ function AppContent() {
               </button>
             </form>
             <p className="login-footnote">{t('login.footnote')}</p>
-          </section>
-        </div>
+          </div>
+        </section>
+        <footer className="vault-login-footer">Product Master Data · {t('app.footer')}</footer>
       </main>
     )
   }
 
-  const totalPages = Math.max(1, Math.ceil((recordPage?.totalCount ?? 0) / pageSize))
+  const totalPages = Math.max(1, Math.ceil(((selectedCompany ? recordPage?.totalCount : companyPage?.totalCount) ?? 0) / pageSize))
   const activeFilterCount = formFields.filter(({ key }) => filters[key].trim()).length
   const hasActiveSearch = Boolean(searchTerm.trim() || activeFilterCount)
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
+    <div
+      className={`vault-app-shell${sidebarCollapsed ? ' vault-sidebar-collapsed' : ''}${mobileNavOpen ? ' vault-mobile-nav-open' : ''}`}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && mobileNavOpen) {
+          event.preventDefault()
+          closeMobileNavigation()
+        }
+      }}
+    >
+      {mobileNavOpen && <button className="vault-nav-backdrop" type="button" tabIndex={-1} aria-label={t('app.navigationClose')} onClick={closeMobileNavigation} />}
+      <aside className="vault-sidebar">
         <a className="brand" href="#catalog" aria-label={t('brand.catalogLabel')}>
           <span className="brand-mark" aria-hidden="true">PM</span>
           <span><strong>Product Master Data</strong><small>{t('brand.workspace')}</small></span>
         </a>
-        <div className="topbar-actions">
+        <WorkspaceNavigation
+          activeView={activeWorkspaceView}
+          labels={{ navigation: t('app.navigation'), section: t('app.archiveSection'), catalog: t('app.catalogTab'), import: t('app.importTab') }}
+          onSelect={(view) => { setActiveWorkspaceView(view); if (mobileNavOpen) closeMobileNavigation() }}
+        />
+        <div className="vault-sidebar-footer"><span>Product Master Data</span><small>{t('app.footer')}</small></div>
+      </aside>
+      <div className="vault-main">
+      <header className="vault-topbar">
+        <div className="vault-topbar-start">
+          <button
+            className="vault-sidebar-toggle vault-desktop-only"
+            type="button"
+            aria-label={t(sidebarCollapsed ? 'app.sidebarExpand' : 'app.sidebarCollapse')}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="vault-sidebar-navigation"
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="2.75" y="3.5" width="14.5" height="13" rx="1.5" /><path d="M7.5 3.5v13M10.5 7.5h4m-4 2.5h4m-4 2.5h3" /></svg>
+          </button>
+          <button
+            className="vault-sidebar-toggle vault-mobile-only"
+            type="button"
+            ref={mobileNavToggleRef}
+            aria-label={t(mobileNavOpen ? 'app.navigationClose' : 'app.navigationOpen')}
+            aria-expanded={mobileNavOpen}
+            aria-controls="vault-sidebar-navigation"
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 5h14M3 10h14M3 15h14" /></svg>
+          </button>
+          {activeWorkspaceView === 'catalog' && !selectedRecord && !recordDetailBusy && !recordDetailError && (
+            <form className="vault-header-search" onSubmit={handleApplyTextSearch}>
+              <label className="sr-only" htmlFor="catalog-search-input">{t('catalog.searchLabel')}</label>
+              <svg className="vault-search-icon" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="8.75" cy="8.75" r="5.75" /><path d="m13 13 4 4" /></svg>
+              <input id="catalog-search-input" type="search" placeholder={t('catalog.searchPlaceholder')} value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} aria-describedby="catalog-search-hint" />
+              <button className="vault-search-submit" type="submit" aria-label={t('catalog.search')}>
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="8.75" cy="8.75" r="5.75" /><path d="m13 13 4 4" /></svg>
+              </button>
+            </form>
+          )}
+        </div>
+        <div className="vault-topbar-actions">
           <PreferenceControls />
-          <span className="user-email">{identity.email ?? identity.userId}</span>
-          <button className="button button-quiet" type="button" onClick={handleLogout} disabled={logoutBusy}>
+          <div className="vault-user">
+            <span className="vault-user-avatar" aria-hidden="true">{(identity.email ?? identity.userId ?? 'U').slice(0, 1).toUpperCase()}</span>
+            <span className="user-email">{identity.email ?? identity.userId ?? t('app.userFallback')}</span>
+          </div>
+          <button className="button button-quiet vault-logout" type="button" onClick={handleLogout} disabled={logoutBusy}>
             {logoutBusy ? t('app.logoutBusy') : t('app.logout')}
           </button>
         </div>
@@ -686,9 +773,13 @@ function AppContent() {
       <main className="workspace" id="catalog">
         <div className="page-heading">
           <div>
-            <p className="eyebrow">{t('app.catalogEyebrow')}</p>
-            <h1>{t('app.title')}</h1>
-            <p className="page-subtitle">{t('app.subtitle')}</p>
+            <nav className="vault-breadcrumb" aria-label={t('app.navigation')}>
+              <span>Product Master Data</span><span aria-hidden="true">/</span>
+              <span>{activeWorkspaceView === 'catalog' ? t('app.catalogTab') : t('app.importTab')}</span>
+            </nav>
+            <p className="eyebrow">{t(activeWorkspaceView === 'catalog' ? 'app.catalogEyebrow' : 'import.eyebrow')}</p>
+            <h1>{activeWorkspaceView === 'catalog' ? t('app.title') : t('app.importTab')}</h1>
+            <p className="page-subtitle">{activeWorkspaceView === 'catalog' ? t('app.subtitle') : t('app.importSubtitle')}</p>
           </div>
           {activeWorkspaceView === 'catalog' && !selectedRecord && (
             <button className="button button-primary" type="button" onClick={() => { setFormError(''); setEditingRecord(null); setForm(emptyForm()); setFormOpen((open) => !open) }}>
@@ -696,12 +787,6 @@ function AppContent() {
             </button>
           )}
         </div>
-
-        <WorkspaceNavigation
-          activeView={activeWorkspaceView}
-          labels={{ navigation: t('app.navigation'), catalog: t('app.catalogTab'), import: t('app.importTab') }}
-          onSelect={setActiveWorkspaceView}
-        />
 
         {notice && <p className="alert alert-success" role="status">{notice}</p>}
 
@@ -899,34 +984,31 @@ function AppContent() {
           {!recordDetailBusy && !recordDetailError && !selectedRecord && (
             <>
               <div className="catalog-toolbar">
-                <div><h2 id="records-title">{t('catalog.title')}</h2><p>{recordPage ? t('catalog.totalCount', { count: formatLocaleNumber(locale, recordPage.totalCount) }) : t('catalog.loading')}</p></div>
-                <span className="page-indicator">{t('catalog.page', { page: formatLocaleNumber(locale, page), total: formatLocaleNumber(locale, totalPages) })}</span>
-              </div>
-              {listError && <p className="alert alert-error" role="alert">{listError}</p>}
-              <form className="catalog-search" onSubmit={handleApplySearch}>
-                <div className="search-row">
-                  <label className="sr-only" htmlFor="catalog-search-input">{t('catalog.searchLabel')}</label>
-                  <input
-                    id="catalog-search-input"
-                    type="search"
-                    placeholder={t('catalog.searchPlaceholder')}
-                    value={searchDraft}
-                    onChange={(event) => setSearchDraft(event.target.value)}
-                  />
-                  <button
-                    className="button button-quiet"
+                <div>
+                  <h2 id="records-title">{selectedCompany ? (selectedCompany.companyName ?? t('catalog.noCompanyName')) : t('company.title')}</h2>
+                  <p>{selectedCompany
+                    ? recordPage ? t('catalog.totalCount', { count: formatLocaleNumber(locale, recordPage.totalCount) }) : t('catalog.loading')
+                    : companyPage ? t('company.totalCount', { count: formatLocaleNumber(locale, companyPage.totalCount) }) : t('catalog.loading')}</p>
+                  <p className="catalog-search-hint" id="catalog-search-hint">{t('catalog.searchHint')}</p>
+                </div>
+                <div className="catalog-toolbar-actions">
+                  {selectedCompany ? <button className="button button-secondary" type="button" onClick={() => { setListBusy(false); setRecordPage(null); setSelectedCompany(null); setPage(1) }}>{t('company.back')}</button> : null}
+                  {selectedCompany ? <button
+                    className="button button-secondary"
                     type="button"
                     aria-expanded={filtersOpen}
                     aria-controls={filtersOpen ? 'catalog-field-filters' : undefined}
                     onClick={() => setFiltersOpen((open) => !open)}
                   >
                     {t('catalog.filter')}{activeFilterCount ? ` (${formatLocaleNumber(locale, activeFilterCount)})` : ''}
-                  </button>
-                  <button className="button button-primary" type="submit">{t('catalog.search')}</button>
+                  </button> : null}
+                  <span className="page-indicator">{t('catalog.page', { page: formatLocaleNumber(locale, page), total: formatLocaleNumber(locale, totalPages) })}</span>
                 </div>
-                <p className="search-hint">{t('catalog.searchHint')}</p>
-                {filtersOpen && (
-                  <div className="field-filters" id="catalog-field-filters">
+              </div>
+              {(selectedCompany ? listError : companyError) && <p className="alert alert-error" role="alert">{selectedCompany ? listError : companyError}</p>}
+              {selectedCompany && filtersOpen && (
+                <form className="catalog-filter-form" id="catalog-field-filters" onSubmit={handleApplySearch}>
+                  <div className="field-filters">
                     {localizedFormFields.map(({ key, label }) => (
                       <div className="filter-field" key={key}>
                         <label htmlFor={`filter-${key}`}>{label}</label>
@@ -943,35 +1025,45 @@ function AppContent() {
                       <button className="button button-primary" type="submit">{t('catalog.applyFilters')}</button>
                     </div>
                   </div>
-                )}
-              </form>
-              <div className="catalog-record-grid" aria-busy={listBusy}>
-                {recordPage?.items.map((record) => (
-                  <CatalogRecordCard
-                    key={record.id}
-                    record={record}
-                    noCompanyLabel={t('catalog.noCompanyName')}
-                    noImageLabel={t('catalog.noPicImage')}
+                </form>
+              )}
+              <div className="catalog-record-list" aria-busy={selectedCompany ? listBusy : companyBusy}>
+                {!selectedCompany && companyPage?.items.length ? <CompanyDirectory
+                  companies={companyPage.items}
+                  labels={{ caption: t('company.caption'), open: t('company.open'), noCompany: t('catalog.noCompanyName'), itemCount: t('company.itemCount') }}
+                  onSelect={(company) => { setRecordPage(null); setSelectedCompany(company); setPage(1) }}
+                /> : null}
+                {selectedCompany && recordPage?.items.length ? (
+                  <CatalogRecordGallery
+                    records={recordPage.items}
+                    labels={{
+                      caption: t('catalog.galleryCaption'),
+                      mCode: t('field.mCode'), itemCode: t('field.itemCode'),
+                      open: t('catalog.openRecord'), noCompany: t('catalog.noCompanyName'), noImage: t('catalog.noPicImage'),
+                      emptyValue: t('catalog.emptyValue'),
+                    }}
                     onSelect={(id) => void handleOpenRecordDetail(id)}
                   />
-                ))}
-                {!listBusy && recordPage?.items.length === 0 && (
+                ) : null}
+                {selectedCompany && !listBusy && recordPage?.items.length === 0 && (
                   <div className="empty-state"><span className="empty-icon" aria-hidden="true">▤</span><h3>{hasActiveSearch ? t('catalog.noMatches') : t('catalog.emptyTitle')}</h3><p>{hasActiveSearch ? t('catalog.emptySearch') : t('catalog.emptyCatalog')}</p>{hasActiveSearch ? <button className="button button-secondary" type="button" onClick={handleClearSearch}>{t('catalog.clearSearch')}</button> : <button className="button button-secondary" type="button" onClick={() => setFormOpen(true)}>{t('app.createFirst')}</button>}</div>
                 )}
-                {listBusy && !recordPage && <p className="loading-state" role="status">{t('catalog.loadingRecords')}</p>}
+                {selectedCompany && listBusy && !recordPage && <p className="loading-state" role="status">{t('catalog.loadingRecords')}</p>}
+                {!selectedCompany && companyBusy && !companyPage && <p className="loading-state" role="status">{t('catalog.loading')}</p>}
+                {!selectedCompany && !companyBusy && companyPage?.items.length === 0 && <div className="empty-state"><h3>{t('company.empty')}</h3></div>}
               </div>
               <div className="pagination">
-                <span>{recordPage ? t('catalog.showing', { shown: formatLocaleNumber(locale, recordPage.items.length), total: formatLocaleNumber(locale, recordPage.totalCount) }) : ''}</span>
+                <span>{selectedCompany && recordPage ? t('catalog.showing', { shown: formatLocaleNumber(locale, recordPage.items.length), total: formatLocaleNumber(locale, recordPage.totalCount) }) : ''}</span>
                 <div className="pagination-actions">
-                  <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.max(1, current - 1)) }} disabled={page <= 1 || listBusy}>{t('catalog.previous')}</button>
-                  <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.min(totalPages, current + 1)) }} disabled={page >= totalPages || listBusy}>{t('catalog.next')}</button>
+                  <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.max(1, current - 1)) }} disabled={page <= 1 || listBusy || companyBusy}>{t('catalog.previous')}</button>
+                  <button className="button button-quiet" type="button" onClick={() => { closeAuditPanel(); setPage((current) => Math.min(totalPages, current + 1)) }} disabled={page >= totalPages || listBusy || companyBusy}>{t('catalog.next')}</button>
                 </div>
               </div>
             </>
           )}
         </WorkspacePanel>
       </main>
-      <footer className="app-footer"><span>Product Master Data</span><span>{t('app.footer')}</span></footer>
+      </div>
     </div>
   )
 }
